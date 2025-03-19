@@ -85,6 +85,7 @@
 	<button onclick="clear_canvas()">清屏</button>
 	<button onclick="horizon_clip_canvas()">水平翻转</button>
 	<button onclick="vertial_clip_canvas()">垂直翻转</button>
+	<button onclick="rotate_canvas()">顺时针旋转</button>
 
 	<p>
 		<input id="edit-font"
@@ -476,44 +477,69 @@
 			}
 		}
 
-		function horizon_clip_canvas() {
+		/**
+		 * 通用画布变换函数
+		 * @param {Function} transformFn - 变换规则函数，接受 (x, y, width, height) 返回 { newX, newY, newWidth?, newHeight? }
+		 */
+		function transform_canvas(transformFn) {
 			const canvas = document.getElementById('canvas');
 			const ctx = canvas.getContext("2d");
-			const sourceData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-			var newData = ctx.createImageData(canvas.width, canvas.height);
-			for (var i = 0, h = sourceData.height; i < h; i++) {
-				for (j = 0, w = sourceData.width; j < w; j++) {
-					newData.data[i * w * 4 + j * 4 + 0] =
-						sourceData.data[i * w * 4 + (w - j) * 4 + 0];
-					newData.data[i * w * 4 + j * 4 + 1] =
-						sourceData.data[i * w * 4 + (w - j) * 4 + 1];
-					newData.data[i * w * 4 + j * 4 + 2] =
-						sourceData.data[i * w * 4 + (w - j) * 4 + 2];
-					newData.data[i * w * 4 + j * 4 + 3] =
-						sourceData.data[i * w * 4 + (w - j) * 4 + 3];
+			const originW = canvas.width;
+			const originH = canvas.height;
+
+			const sourceData = ctx.getImageData(0, 0, originW, originH);
+
+			// 获取新的画布尺寸（如果有调整）
+			const { newWidth = originW, newHeight = originH } = transformFn(-1, -1, originW, originH);
+			const newData = ctx.createImageData(newWidth, newHeight);
+
+			// 调整画布尺寸
+			canvas.width = newWidth;
+			canvas.height = newHeight;
+
+			// 应用变换规则
+			for (let y = 0; y < originH; y++) {
+				for (let x = 0; x < originW; x++) {
+					const originalPos = (y * originW + x) * 4;
+					const { newX, newY } = transformFn(x, y, originW, originH);
+					const newPos = (newY * newWidth + newX) * 4;
+
+					// 复制像素（包括RGBA四个通道）
+					newData.data[newPos] = sourceData.data[originalPos];       // R
+					newData.data[newPos + 1] = sourceData.data[originalPos + 1]; // G
+					newData.data[newPos + 2] = sourceData.data[originalPos + 2]; // B
+					newData.data[newPos + 3] = sourceData.data[originalPos + 3]; // A
 				}
 			}
+
+			// 更新画布内容
 			ctx.putImageData(newData, 0, 0);
 		}
 
+		// 水平翻转
+		function horizon_clip_canvas() {
+			transform_canvas((x, y, width) => ({
+				newX: width - 1 - x,
+				newY: y
+			}));
+		}
+
+		// 垂直翻转
 		function vertial_clip_canvas() {
-			const canvas = document.getElementById('canvas');
-			const ctx = canvas.getContext("2d");
-			const sourceData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-			var newData = ctx.createImageData(canvas.width, canvas.height);
-			for (var i = 0, h = sourceData.height; i < h; i++) {
-				for (var j = 0, w = sourceData.width; j < w; j++) {
-					newData.data[i * w * 4 + j * 4 + 0] =
-						sourceData.data[(h - i) * w * 4 + j * 4 + 0];
-					newData.data[i * w * 4 + j * 4 + 1] =
-						sourceData.data[(h - i) * w * 4 + j * 4 + 1];
-					newData.data[i * w * 4 + j * 4 + 2] =
-						sourceData.data[(h - i) * w * 4 + j * 4 + 2];
-					newData.data[i * w * 4 + j * 4 + 3] =
-						sourceData.data[(h - i) * w * 4 + j * 4 + 3];
-				}
-			}
-			ctx.putImageData(newData, 0, 0);
+			transform_canvas((x, y, width, height) => ({
+				newX: x,
+				newY: height - 1 - y
+			}));
+		}
+
+		// 顺时针旋转90度
+		function rotate_canvas() {
+			transform_canvas((x, y, width, height) => ({
+				newX: height - 1 - y,
+				newY: x,
+				newWidth: height,
+				newHeight: width
+			}));
 		}
 
 		function delay(ms) {
@@ -570,6 +596,7 @@
 					}
 				}
 
+				/** @type {HTMLCanvasElement} */
 				const canvas = document.getElementById("canvas");
 				const ctx = canvas.getContext("2d");
 				const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -634,9 +661,7 @@
 				priceTag.disconnect();
 			}
 		});
-
 		/*****************************以上是移植的**************************************/
-
 		document.body.onload = () => {
 			setInterval(() => {
 				const { localeTimeString, year, month, day, week } = getUnixTime();
