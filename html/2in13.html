@@ -9,14 +9,13 @@
 
 	<style>
 		button,
-        a {
+		a {
 			padding: 6px;
 			margin: 6px;
 			transform-origin: top left;
 			transform: scale(1.1);
 			display: inline-block;
 		}
-
 	</style>
 </head>
 
@@ -24,8 +23,8 @@
 
 	<h1>墨水屏传图</h1>
 
-		<input type="file" id="image_file" onchange="update_image()" accept="image/*">
-		<label>价签重命名（最长12字符，1个汉字占3个字符）</label><input id="tag_name" maxlength="12">
+	<input type="file" id="image_file" onchange="update_image()" accept="image/*">
+	<label>价签重命名（最长12字符，1个汉字占3个字符）</label><input id="tag_name" maxlength="12">
 	<p>
 		<select id="resolution" onchange="update_image()">
 			<option value="152*152">152*152</option>
@@ -58,38 +57,38 @@
 	</p>
 
 
-			模式：
-			<select id="canvas-mode">
-				<option value="paint">画笔</option>
-				<option value="font" title="输入完成后 点击：保存文本框">输入文字</option>
-			</select>
-			画笔/文字大小：
-			<input type="number" max="13" min="1" step="1" value="3" id="paint-size">
-			画笔颜色：
-			<select id="paint-color">
-				<!-- <option value="red">红色</option> -->
-				<option value="white">白色</option>
-				<option value="black">黑色</option>
-			</select>
+	模式：
+	<select id="canvas-mode">
+		<option value="paint">画笔</option>
+		<option value="font" title="输入完成后 点击：保存文本框">输入文字</option>
+	</select>
+	画笔/文字大小：
+	<input type="number" max="13" min="1" step="1" value="3" id="paint-size">
+	画笔颜色：
+	<select id="paint-color">
+		<!-- <option value="red">红色</option> -->
+		<option value="white">白色</option>
+		<option value="black">黑色</option>
+	</select>
 
-			<select id="font" title="字体" style="display: none;">
-				<option value="微软雅黑">微软雅黑</option>
-				<option value="黑体">黑体</option>
-				<option value="仿宋">仿宋</option>
-				<option value="宋体">宋体</option>
-				<option value="楷体_GB2312">楷体_GB2312</option>
-				<option value="华文行楷">华文行楷</option>
-			</select>
-			<p></p>
-			<button onclick="update_image()">重新加载</button>
-			<button id="update-text" >保存文本框</button>
-			<button onclick="clear_canvas()">清屏</button>
-			<button onclick="horizon_clip_canvas()">水平翻转</button>
-			<button onclick="vertial_clip_canvas()">垂直翻转</button>
+	<select id="font" title="字体" style="display: none;">
+		<option value="微软雅黑">微软雅黑</option>
+		<option value="黑体">黑体</option>
+		<option value="仿宋">仿宋</option>
+		<option value="宋体">宋体</option>
+		<option value="楷体_GB2312">楷体_GB2312</option>
+		<option value="华文行楷">华文行楷</option>
+	</select>
+	<p></p>
+	<button onclick="update_image()">重新加载</button>
+	<button id="update-text">保存文本框</button>
+	<button onclick="clear_canvas()">清屏</button>
+	<button onclick="horizon_clip_canvas()">水平翻转</button>
+	<button onclick="vertial_clip_canvas()">垂直翻转</button>
 
-		<p>
+	<p>
 		<input id="edit-font"
-		style="max-width: auto; position: absolute; border: black solid 1px;background-color: rgba(0,0,0,0);display: none;overflow: auto" />
+			style="max-width: auto; position: absolute; border: black solid 1px;background-color: rgba(0,0,0,0);display: none;overflow: auto" />
 		<canvas id="original" style="border: black solid 1px;"></canvas>
 		<canvas id="canvas" style="border: black solid 1px;"></canvas>
 	</p>
@@ -520,11 +519,12 @@
 		function delay(ms) {
 			return new Promise(resolve => setTimeout(resolve, ms));
 		}
+
 		document.getElementById("go").addEventListener("click", async event => {
 			var PACK_LEN, BURST_NUM;
 			const textEncoder = new TextEncoder();
 			const utf8array = textEncoder.encode(document.getElementById("tag_name").value);
-			if (utf8array.length > 12){
+			if (utf8array.length > 12) {
 				alert("名字太长");
 				return;
 			}
@@ -556,46 +556,46 @@
 				var type = value.getUint8(4);
 				console.log(`${width}*${height}, type=${type}`);
 				await priceTag.writeCommand(Uint8Array.of(82)); //Reset
-				for(var retry = 0;; retry++){
+				for (var retry = 0; ; retry++) {
 					var r = await priceTag.readStatus();
 					if (r.getUint8(0) == 0x42) {
 						console.log('initialized');
 						break;
 					} else {
-						if (retry < 10){
+						if (retry < 10) {
 							await delay(20);
-						}else{
+						} else {
 							throw "md5 uninitialized";
 						}
 					}
 				}
 
-					const canvas = document.getElementById("canvas");
-					const ctx = canvas.getContext("2d");
-					const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-					var image_dither = new ImageDither(canvas.width, canvas.height, imageData.data);
-					var mode = document.getElementById("dither_mode").checked;
-					var palette;
-					if (document.getElementById("bw").checked) {
-						palette = [0, 255];
-					} else if (document.getElementById("4gray").checked) {
-						palette = [0, 0x55, 0xaa, 255];
-					} else if (document.getElementById("bwr").checked || document.getElementById("bwr2").checked) {
-						palette = [{ r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, { r: 255, g: 0, b: 0 }];
-					} else if (document.getElementById("bwry").checked) {
-						palette = [{ r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, { r: 255, g: 0, b: 0 }, { r: 255, g: 255, b: 0 }];
-					} else if (document.getElementById("cmyk").checked) {
-						palette = seven_color;
-					}
-					image_dither.dither(palette, mode);
-					var xy = document.getElementById("resolution").value.split("*");
-					var rot = (xy[0] < xy[1]) ^ (canvas.width < canvas.height);
-					res = image_dither.toBytes(palette, rot, document.getElementById("bwr2").checked);
-					outputData = res.o1.concat(res.o2);
-					for (let i = 0; i < imageData.data.length; i++) {
-						imageData.data[i] = image_dither.imageData[i];
-					}
-					ctx.putImageData(imageData, 0, 0);
+				const canvas = document.getElementById("canvas");
+				const ctx = canvas.getContext("2d");
+				const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+				var image_dither = new ImageDither(canvas.width, canvas.height, imageData.data);
+				var mode = document.getElementById("dither_mode").checked;
+				var palette;
+				if (document.getElementById("bw").checked) {
+					palette = [0, 255];
+				} else if (document.getElementById("4gray").checked) {
+					palette = [0, 0x55, 0xaa, 255];
+				} else if (document.getElementById("bwr").checked || document.getElementById("bwr2").checked) {
+					palette = [{ r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, { r: 255, g: 0, b: 0 }];
+				} else if (document.getElementById("bwry").checked) {
+					palette = [{ r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, { r: 255, g: 0, b: 0 }, { r: 255, g: 255, b: 0 }];
+				} else if (document.getElementById("cmyk").checked) {
+					palette = seven_color;
+				}
+				image_dither.dither(palette, mode);
+				var xy = document.getElementById("resolution").value.split("*");
+				var rot = (xy[0] < xy[1]) ^ (canvas.width < canvas.height);
+				res = image_dither.toBytes(palette, rot, document.getElementById("bwr2").checked);
+				outputData = res.o1.concat(res.o2);
+				for (let i = 0; i < imageData.data.length; i++) {
+					imageData.data[i] = image_dither.imageData[i];
+				}
+				ctx.putImageData(imageData, 0, 0);
 
 				var binData = structuredClone(outputData);
 
@@ -609,22 +609,22 @@
 					document.getElementById("progress").innerHTML = `${i}/${binData.length}`;
 				}
 				await priceTag.writeCommand(Uint8Array.of(0x46));
-				for(var retry = 0;; retry++){
+				for (var retry = 0; ; retry++) {
 					var r = await priceTag.readStatus();
 					if (r.getUint8(0) == 0x44) {
 						console.log('finalized');
 						break;
 					} else {
-						if (retry < 10){
+						if (retry < 10) {
 							await delay(20);
-						}else{
+						} else {
 							throw "md5 unfinalized";
 						}
 					}
 				}
 				document.getElementById("progressBar").value = 100;
 				document.getElementById("progress").innerHTML = "";
-				if (utf8array.length > 0){
+				if (utf8array.length > 0) {
 					await priceTag.rename(utf8array);
 				}
 
@@ -634,7 +634,9 @@
 				priceTag.disconnect();
 			}
 		});
-/*****************************以上是移植的**************************************/
+
+		/*****************************以上是移植的**************************************/
+
 		document.body.onload = () => {
 			setInterval(() => {
 				const { localeTimeString, year, month, day, week } = getUnixTime();
@@ -700,10 +702,10 @@
 			document.getElementById('resolution').onchange = function () {
 				const size = document.getElementById('resolution').value;
 				console.log(size)
-				if(size == "128*296"){
+				if (size == "128*296") {
 					canvasRotate = 90;
 				}
-				else{
+				else {
 					canvasRotate = 0;
 				}
 				width = parseInt(size.split('*')[0])
@@ -813,7 +815,6 @@
 				}
 			}
 		}
-
 
 	</script>
 </body>
