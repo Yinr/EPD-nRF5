@@ -522,19 +522,36 @@
 			}
 		}
 
-		/** @type {Array<ColorRGB>} */
-		const seven_color = [
-			{ r: 255, g: 255, b: 0 },
-			{ r: 0, g: 255, b: 0 },
-			{ r: 0, g: 0, b: 0 },
-			{ r: 255, g: 0, b: 0 },
-			{ r: 255, g: 255, b: 255 },
-			{ r: 255, g: 128, b: 0 },
-			{ r: 0, g: 0, b: 255 }
-		];
-
 		/** @type {Array<ColorRAW>} */
 		var outputData;
+
+		/**
+		 * 获取当前选中的调色板
+		 * @returns {Array<Color>}
+		 */
+		function getSelectedPalette() {
+			if (document.getElementById("bw").checked) {
+				return [0, 255];
+			} else if (document.getElementById("4gray").checked) {
+				return [0, 0x55, 0xaa, 255];
+			} else if (document.getElementById("bwr").checked || document.getElementById("bwr2").checked) {
+				return [{ r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, { r: 255, g: 0, b: 0 }];
+			} else if (document.getElementById("bwry").checked) {
+				return [{ r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, { r: 255, g: 0, b: 0 }, { r: 255, g: 255, b: 0 }];
+			} else if (document.getElementById("cmyk").checked) {
+				// seven color
+				return [
+					{ r: 255, g: 255, b: 0 },
+					{ r: 0, g: 255, b: 0 },
+					{ r: 0, g: 0, b: 0 },
+					{ r: 255, g: 0, b: 0 },
+					{ r: 255, g: 255, b: 255 },
+					{ r: 255, g: 128, b: 0 },
+					{ r: 0, g: 0, b: 255 }
+				];
+			}
+			return [];
+		}
 
 		/**
 		 * 更新图像
@@ -570,18 +587,7 @@
 					const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 					var image_dither = new ImageDither(canvas.width, canvas.height, imageData.data);
 					var mode = document.getElementById("dither_mode").checked;
-					var palette;
-					if (document.getElementById("bw").checked) {
-						palette = [0, 255];
-					} else if (document.getElementById("4gray").checked) {
-						palette = [0, 0x55, 0xaa, 255];
-					} else if (document.getElementById("bwr").checked || document.getElementById("bwr2").checked) {
-						palette = [{ r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, { r: 255, g: 0, b: 0 }];
-					} else if (document.getElementById("bwry").checked) {
-						palette = [{ r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, { r: 255, g: 0, b: 0 }, { r: 255, g: 255, b: 0 }];
-					} else if (document.getElementById("cmyk").checked) {
-						palette = seven_color;
-					}
+					var palette = getSelectedPalette();
 					image_dither.dither(palette, mode);
 					res = image_dither.toBytes(palette, rot, document.getElementById("bwr2").checked);
 					outputData = res.o1.concat(res.o2);
@@ -758,18 +764,7 @@
 				const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 				var image_dither = new ImageDither(canvas.width, canvas.height, imageData.data);
 				var mode = document.getElementById("dither_mode").checked;
-				var palette;
-				if (document.getElementById("bw").checked) {
-					palette = [0, 255];
-				} else if (document.getElementById("4gray").checked) {
-					palette = [0, 0x55, 0xaa, 255];
-				} else if (document.getElementById("bwr").checked || document.getElementById("bwr2").checked) {
-					palette = [{ r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, { r: 255, g: 0, b: 0 }];
-				} else if (document.getElementById("bwry").checked) {
-					palette = [{ r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, { r: 255, g: 0, b: 0 }, { r: 255, g: 255, b: 0 }];
-				} else if (document.getElementById("cmyk").checked) {
-					palette = seven_color;
-				}
+				var palette = getSelectedPalette();
 				image_dither.dither(palette, mode);
 				var xy = document.getElementById("resolution").value.split("*");
 				var rot = (xy[0] < xy[1]) ^ (canvas.width < canvas.height);
