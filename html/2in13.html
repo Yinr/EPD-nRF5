@@ -66,9 +66,9 @@
 	<input type="number" max="13" min="1" step="1" value="3" id="paint-size">
 	画笔颜色：
 	<select id="paint-color">
-		<!-- <option value="red">红色</option> -->
 		<option value="white">白色</option>
 		<option value="black">黑色</option>
+		<option value="red">红色</option>
 	</select>
 
 	<select id="font" title="字体" style="display: none;">
@@ -99,6 +99,15 @@
 	<label id="progress"></label>
 
 	<script>
+		/** @typedef {number} ColorGray */
+		/** @typedef {Object} ColorRGB
+		 * @property {number} r
+		 * @property {number} g
+		 * @property {number} b
+		 */
+		/** @typedef {ColorGray | ColorRGB} Color */
+		/** @typedef {number} ColorRAW */
+		/** @typedef {Uint8ClampedArray} ImageData */
 
 		/**
 		 * 电子价签类，用于蓝牙通信和操作
@@ -238,20 +247,20 @@
 			width;
 			/** @type {number} */
 			height;
-			/** @type {Array<Array<{r: number, g: number, b: number}>>} */
+			/** @type {Array<Array<ColorRGB>>} */
 			raw;
-			/** @type {Array<Array<number | {r: number, g: number, b: number}>>} */
+			/** @type {Array<Array<Color>>} */
 			result;
-			/** @type {Uint8ClampedArray} */
+			/** @type {ImageData} */
 			imageData;
 
 			/**
 			 * @param {number} width 图像宽度
 			 * @param {number} height 图像高度
-			 * @param {Uint8ClampedArray} imageData 图像数据
+			 * @param {ImageData} imageData 图像数据
 			 */
 			constructor(width, height, imageData) {
-				/** @type {Array<Array<{r: number, g: number, b: number}>>} */
+				/** @type {Array<Array<ColorRGB>>} */
 				var image = new Array();
 				this.width = width;
 				this.height = height;
@@ -273,9 +282,9 @@
 
 			/**
 			 * 添加两个像素
-			 * @param {{r: number, g: number, b: number}} p1
-			 * @param {{r: number, g: number, b: number}} p2
-			 * @returns {{r: number, g: number, b: number}}
+			 * @param {ColorRGB} p1
+			 * @param {ColorRGB} p2
+			 * @returns {ColorRGB}
 			 */
 			static pixel_add(p1, p2) {
 				return { r: p1.r + p2.r, g: p1.g + p2.g, b: p1.b + p2.b };
@@ -283,9 +292,9 @@
 
 			/**
 			 * 减去两个像素
-			 * @param {{r: number, g: number, b: number}} p1
-			 * @param {{r: number, g: number, b: number}} p2
-			 * @returns {{r: number, g: number, b: number}}
+			 * @param {ColorRGB} p1
+			 * @param {ColorRGB} p2
+			 * @returns {ColorRGB}
 			 */
 			static pixel_sub(p1, p2) {
 				return { r: p1.r - p2.r, g: p1.g - p2.g, b: p1.b - p2.b };
@@ -293,9 +302,9 @@
 
 			/**
 			 * 像素乘以系数
-			 * @param {{r: number, g: number, b: number}} p
+			 * @param {ColorRGB} p
 			 * @param {number} a
-			 * @returns {{r: number, g: number, b: number}}
+			 * @returns {ColorRGB}
 			 */
 			static pixel_mul(p, a) {
 				return { r: p.r * a, g: p.g * a, b: p.b * a };
@@ -303,7 +312,7 @@
 
 			/**
 			 * 计算像素绝对值
-			 * @param {{r: number, g: number, b: number}} p
+			 * @param {ColorRGB} p
 			 * @returns {number}
 			 */
 			static pixel_abs(p) {
@@ -312,8 +321,8 @@
 
 			/**
 			 * 找到最接近的颜色
-			 * @param {{r: number, g: number, b: number} | number} p
-			 * @param {Array<{r: number, g: number, b: number} | number>} palette
+			 * @param {Color} p
+			 * @param {Array<Color>} palette
 			 * @returns {number}
 			 */
 			static find_nearest(p, palette) {
@@ -351,7 +360,7 @@
 
 			/**
 			 * 应用抖动算法
-			 * @param {Array<{r: number, g: number, b: number} | number>} palette
+			 * @param {Array<Color>} palette
 			 * @param {boolean} mode 是否启用高级抖动模式
 			 */
 			dither(palette, mode) {
@@ -439,10 +448,10 @@
 
 			/**
 			 * 将图像转换为字节数组
-			 * @param {Array<{r: number, g: number, b: number} | number>} palette
+			 * @param {Array<Color>} palette
 			 * @param {boolean} rot 是否旋转
 			 * @param {boolean} two_pixel_one_byte 是否两个像素占一个字节
-			 * @returns {{o1: Array<number>, o2: Array<number>}}
+			 * @returns {{o1: Array<ColorRAW>, o2: Array<ColorRAW>}}
 			 */
 			toBytes(palette, rot, two_pixel_one_byte) {
 				// based on 2-bit index of pixel in palette
@@ -494,8 +503,8 @@
 
 			/**
 			 * 查找元素在列表中的索引
-			 * @param {Array<number | {r: number, g: number, b: number}>} list
-			 * @param {number | {r: number, g: number, b: number}} value
+			 * @param {Array<Color>} list
+			 * @param {Color} value
 			 * @returns {number}
 			 */
 			static indexOf(list, value) {
@@ -513,7 +522,7 @@
 			}
 		}
 
-		/** @type {Array<{r: number, g: number, b: number}>} */
+		/** @type {Array<ColorRGB>} */
 		const seven_color = [
 			{ r: 255, g: 255, b: 0 },
 			{ r: 0, g: 255, b: 0 },
@@ -524,7 +533,7 @@
 			{ r: 0, g: 0, b: 255 }
 		];
 
-		/** @type {Array<number>} */
+		/** @type {Array<ColorRAW>} */
 		var outputData;
 
 		/**
