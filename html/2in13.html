@@ -24,7 +24,9 @@
 	<h1>墨水屏传图</h1>
 
 	<input type="file" id="image_file" onchange="update_image()" accept="image/*">
-	<label>价签重命名（最长12字符，1个汉字占3个字符）</label><input id="tag_name" maxlength="12">
+	<p>
+		<label for="tag_name">价签重命名（最长12字符，1个汉字占3个字符）</label><input id="tag_name" maxlength="12">
+	</p>
 	<p>
 		<select id="resolution" onchange="update_image()">
 			<option value="152*152">152*152</option>
@@ -57,23 +59,23 @@
 	</p>
 
 
-	模式：
+	<label for="canvas-mode">模式：</label>
 	<select id="canvas-mode">
-		<option value="paint">画笔</option>
+		<option value="paint" selected>画笔</option>
 		<option value="font" title="输入完成后 点击：保存文本框">输入文字</option>
 	</select>
-	画笔/文字大小：
+	<label for="paint-size">画笔/文字大小：</label>
 	<input type="number" max="13" min="1" step="1" value="3" id="paint-size">
-	画笔颜色：
+	<label for="paint-color">画笔颜色：</label>
 	<select id="paint-color">
 		<option value="white">白色</option>
-		<option value="black">黑色</option>
+		<option value="black" selected>黑色</option>
 		<option value="red">红色</option>
 	</select>
 
 	<select id="font" title="字体" style="display: none;">
 		<option value="微软雅黑">微软雅黑</option>
-		<option value="黑体">黑体</option>
+		<option value="黑体" selected>黑体</option>
 		<option value="仿宋">仿宋</option>
 		<option value="宋体">宋体</option>
 		<option value="楷体_GB2312">楷体_GB2312</option>
@@ -541,13 +543,13 @@
 			} else if (document.getElementById("cmyk").checked) {
 				// seven color
 				return [
-					{ r: 255, g: 255, b: 0 },
-					{ r: 0, g: 255, b: 0 },
-					{ r: 0, g: 0, b: 0 },
-					{ r: 255, g: 0, b: 0 },
-					{ r: 255, g: 255, b: 255 },
-					{ r: 255, g: 128, b: 0 },
-					{ r: 0, g: 0, b: 255 }
+					{ r: 255, g: 255, b: 0 }, // 黄色
+					{ r: 0, g: 255, b: 0 },   // 绿色
+					{ r: 0, g: 0, b: 0 },     // 黑色
+					{ r: 255, g: 0, b: 0 },   // 红色
+					{ r: 255, g: 255, b: 255 }, // 白色
+					{ r: 255, g: 128, b: 0 }, // 橙色
+					{ r: 0, g: 0, b: 255 }    // 蓝色
 				];
 			}
 			return [];
