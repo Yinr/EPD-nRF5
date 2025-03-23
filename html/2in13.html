@@ -812,11 +812,6 @@
 		/*****************************以上是移植的**************************************/
 
 		document.body.onload = () => {
-			setInterval(() => {
-				const { localeTimeString, year, month, day, week } = getUnixTime();
-				document.getElementById('time-setter').innerText = `设置时间为：${year}-${month}-${day} ${localeTimeString} 星期${week}`;
-			}, 1000);
-
 			const canvas = document.getElementById('canvas');
 			const ctx = canvas.getContext("2d");
 			ctx.fillStyle = 'white';
