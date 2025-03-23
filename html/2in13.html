@@ -921,72 +921,83 @@
 				}
 			}
 
-			canvas.onmousedown = function (e) {
-				let ele = get_position(canvas, e.clientX, e.clientY)
-				let { x, y } = ele
-
+			const handleStart = (x, y) => {
+				const { x: canvasX, y: canvasY } = get_position(canvas, x, y);
 				switch (image_mode.value) {
 					case 'paint':
 						is_allow_drawing = true;
 						ctx.beginPath();
-						ctx.moveTo(x, y);
+						ctx.moveTo(canvasX, canvasY);
 						break;
 					case 'font':
 						editor.style.display = 'block';
-						editor.style.left = `${e.clientX}px`;
-						editor.style.top = `${e.clientY}px`;
+						editor.style.left = `${x}px`;
+						editor.style.top = `${y}px`;
 						editor.style.fontSize = `${paint_size.value * 10}px`;
 						editor.style.color = paint_color.value;
 						editor.style.fontFamily = font.value;
 						editor.style.fontWeight = 'bold';
-
-						break
+						break;
 					default:
 						break;
 				}
 			};
 
-			canvas.onmousemove = (e) => {
-				let ele = get_position(canvas, e.clientX, e.clientY)
-				let { x, y } = ele;
+			const handleMove = (x, y) => {
+				const { x: canvasX, y: canvasY } = get_position(canvas, x, y);
 				switch (image_mode.value) {
 					case 'paint':
 						if (is_allow_drawing) {
 							ctx.lineWidth = paint_size.value;
 							ctx.strokeStyle = paint_color.value;
-							ctx.lineTo(x, y);
+							ctx.lineTo(canvasX, canvasY);
 							ctx.stroke();
 						}
 						break;
 					case 'font':
 						break;
-
 					default:
 						break;
 				}
-			}
+			};
 
-			canvas.onmouseup = function () {
+			const handleEnd = () => {
 				switch (image_mode.value) {
 					case 'paint':
 						is_allow_drawing = false;
 						break;
-
 					case 'font':
 						editor.focus();
 						is_allow_move_editor = false;
 						break;
-
 					default:
 						break;
 				}
-			}
+			};
 
-			canvas.onmouseleave = function () {
-				if (image_mode.value === 'paint') {
-					is_allow_drawing = false;
-				}
-			}
+			// 鼠标事件
+			canvas.onmousedown = (e) => handleStart(e.clientX, e.clientY);
+			canvas.onmousemove = (e) => handleMove(e.clientX, e.clientY);
+			canvas.onmouseup = handleEnd;
+			canvas.onmouseleave = () => { if (image_mode.value === 'paint') is_allow_drawing = false; };
+
+			// 触摸事件
+			canvas.addEventListener("touchstart", (e) => {
+				e.preventDefault();
+				const touch = e.touches[0];
+				handleStart(touch.clientX, touch.clientY);
+			});
+
+			canvas.addEventListener("touchmove", (e) => {
+				e.preventDefault();
+				const touch = e.touches[0];
+				handleMove(touch.clientX, touch.clientY);
+			});
+
+			canvas.addEventListener("touchend", (e) => {
+				e.preventDefault();
+				handleEnd();
+			});
 		}
 
 	</script>
