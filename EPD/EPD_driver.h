@@ -59,6 +59,7 @@ typedef struct
 #define LOW             (0x0)
 #define HIGH            (0x1)
 
+#define DEFAULT         (0xFF)
 #define INPUT           (0x0)
 #define OUTPUT          (0x1)
 #define INPUT_PULLUP    (0x2)
@@ -92,10 +93,14 @@ void EPD_WriteData(uint8_t *Data, uint8_t Len);
 void EPD_Reset(uint32_t value, uint16_t duration);
 void EPD_WaitBusy(uint32_t value, uint16_t timeout);
 
-// lED
+// LED
 void EPD_LED_ON(void);
 void EPD_LED_OFF(void);
 void EPD_LED_Toggle(void);
+void EPD_LED_BLINK(void);
+
+// VDD voltage
+float EPD_ReadVoltage(void);
 
 epd_model_t *epd_get(void);
 epd_model_t *epd_init(epd_model_id_t id);
