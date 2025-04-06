@@ -156,7 +156,7 @@ function getImageData(canvas, driver, mode) {
 }
 
 async function sendimg() {
-  startTime = new Date().getTime();
+  const status = document.getElementById("status");
   const canvas = document.getElementById("canvas");
   const driver = document.getElementById("epddriver").value;
   const mode = document.getElementById('dithering').value;
@@ -167,6 +167,9 @@ async function sendimg() {
     addLog('请选择一种取模算法！');
     return;
   }
+
+  startTime = new Date().getTime();
+  status.parentElement.style.display = "block";
 
   if (imgArray.length === ramSize * 2) {
     await epdWrite(driver === "02" ? 0x24 : 0x10, imgArray.slice(0, ramSize));
@@ -187,6 +190,9 @@ async function sendimg() {
   const sendTime = (new Date().getTime() - startTime) / 1000.0;
   addLog(`发送完成！耗时: ${sendTime}s`);
   setStatus(`发送完成！耗时: ${sendTime}s`);
+  setTimeout(() => {
+    status.parentElement.style.display = "none";
+  }, 5000);
 }
 
 function updateButtonStatus() {
