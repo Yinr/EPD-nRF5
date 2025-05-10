@@ -80,6 +80,7 @@ async function epdWrite(cmd, data) {
 }
 
 async function setDriver() {
+  if (!epdCharacteristic) return;
   const driver = document.getElementById("epddriver").value;
   const invert = document.getElementById("epdinvert").checked;
   let opt = driver;
