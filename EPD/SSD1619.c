@@ -28,6 +28,11 @@
 #define CMD_ANALOG_BLOCK_CTRL     0x74        // Set Analog Block Control
 #define CMD_DIGITAL_BLOCK_CTRL    0x7E        // Set Digital Block Control
 
+static void SSD1619_WaitBusy(uint16_t timeout)
+{
+    EPD_WaitBusy(HIGH, timeout);
+}
+
 static void SSD1619_Update(uint8_t seq)
 {
     EPD_WriteCommand(CMD_DISP_CTRL2);
@@ -37,8 +42,10 @@ static void SSD1619_Update(uint8_t seq)
 
 int8_t SSD1619_Read_Temp(void)
 {
-    EPD_WriteCommand_SW(CMD_TSENSOR_READ);
-    return (int8_t) EPD_ReadByte_SW();
+    SSD1619_Update(0xB1);
+    SSD1619_WaitBusy(500);
+    EPD_WriteCommand(CMD_TSENSOR_READ);
+    return (int8_t) EPD_ReadByte();
 }
 
 void SSD1619_Force_Temp(int8_t value)
@@ -73,7 +80,7 @@ void SSD1619_Init()
     EPD_Reset(HIGH, 10);
 
     EPD_WriteCommand(CMD_SW_RESET);
-    EPD_WaitBusy(HIGH, 200);
+    SSD1619_WaitBusy(200);
 
     EPD_WriteCommand(CMD_ANALOG_BLOCK_CTRL);
     EPD_WriteByte(0x54);
@@ -97,10 +104,14 @@ static void SSD1619_Refresh(void)
 {
     epd_model_t *EPD = epd_get();
 
+    EPD_WriteCommand(CMD_DISP_CTRL1);
+    EPD_WriteByte(0x80); // Inverse RED RAM
+    EPD_WriteByte(0x00); // Single chip application
+
     NRF_LOG_DEBUG("[EPD]: refresh begin\n");
     NRF_LOG_DEBUG("[EPD]: temperature: %d\n", SSD1619_Read_Temp());
     SSD1619_Update(0xF7);
-    EPD_WaitBusy(HIGH, 30000);
+    SSD1619_WaitBusy(30000);
     NRF_LOG_DEBUG("[EPD]: refresh end\n");
 
     _setPartialRamArea(0, 0, EPD->width, EPD->height); // DO NOT REMOVE!
@@ -123,7 +134,7 @@ void SSD1619_Clear(void)
     EPD_WriteCommand(CMD_WRITE_RAM2);
     for (uint16_t j = 0; j < Height; j++) {
         for (uint16_t i = 0; i < Width; i++) {
-            EPD_WriteByte(EPD->invert_color ? 0x00 : 0xFF);
+            EPD_WriteByte(0xFF);
         }
     }
 
@@ -137,6 +148,7 @@ void SSD1619_Write_Image(uint8_t *black, uint8_t *color, uint16_t x, uint16_t y,
     x -= x % 8; // byte boundary
     w = wb * 8; // byte boundary
     if (x + w > EPD->width || y + h > EPD->height) return;
+
     _setPartialRamArea(x, y, w, h);
     EPD_WriteCommand(CMD_WRITE_RAM1);
     for (uint16_t i = 0; i < h; i++) {
@@ -148,8 +160,7 @@ void SSD1619_Write_Image(uint8_t *black, uint8_t *color, uint16_t x, uint16_t y,
     for (uint16_t i = 0; i < h; i++) {
         for (uint16_t j = 0; j < w / 8; j++) {
             if (EPD->bwr) {
-                uint8_t data = color ? color[j + i * wb] : 0xFF;
-                EPD_WriteByte(EPD->invert_color ? ~data : data);
+                EPD_WriteByte(color ? color[j + i * wb] : 0xFF);
             } else {
                 EPD_WriteByte(black[j + i * wb]);
             }
@@ -181,7 +192,6 @@ const epd_model_t epd_ssd1619_420_bwr = {
     .width = 400,
     .height = 300,
     .bwr = true,
-    .invert_color = true,
 };
 
 // SSD1619 400x300 Black/White
@@ -191,5 +201,4 @@ const epd_model_t epd_ssd1619_420_bw = {
     .width = 400,
     .height = 300,
     .bwr = false,
-    .invert_color = false,
 };
