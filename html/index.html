@@ -28,12 +28,16 @@
 						<option value="02">SSD1619（三色屏）</option>
 						<option value="04">SSD1683（黑白屏）</option>
 						<option value="02">SSD1683（三色屏）</option>
-					</select>	
+					</select>
+				</div>
+				<div class="flex-group debug">
+					<input type="checkbox" id="epdinvert" onchange="setDriver()" />
+					<label for="epdinvert">反色</label>
 				</div>
 				<div class="flex-group debug">
 					<label for="epdpins">引脚</label>
 					<input id="epdpins" type="text" value="">
-					<button id="setDriverbutton" type="button" class="primary" onclick="setDriver()">确认</button>
+					<button id="setDriverbutton" type="button" class="primary" onclick="setPins()">确认</button>
 				</div>
                 <div class="flex-group">
                     <button id="calendarmodebutton" type="button" class="primary" onclick="syncTime(1)">日历模式</button>
