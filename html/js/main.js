@@ -1,20 +1,15 @@
-let bleDevice;
-let gattServer;
-let epdService;
-let epdCharacteristic;
-let reconnectTrys = 0;
+let bleDevice, gattServer;
+let epdService, epdCharacteristic;
+let startTime, msgIndex;
+let canvas, ctx, textDecoder;
 
-let canvas;
-let startTime;
-
-const MAX_PACKET_SIZE = 20;
 const EpdCmd = {
   SET_PINS:  0x00,
   INIT:      0x01,
   CLEAR:     0x02,
   SEND_CMD:  0x03,
   SEND_DATA: 0x04,
-  DISPLAY:   0x05,
+  REFRESH:   0x05,
   SLEEP:     0x06,
 
   SET_TIME:  0x20,
@@ -29,22 +24,8 @@ function resetVariables() {
   gattServer = null;
   epdService = null;
   epdCharacteristic = null;
+  msgIndex = 0;
   document.getElementById("log").value = '';
-}
-
-async function handleError(error) {
-  console.error(error);
-  resetVariables();
-  if (bleDevice == null)
-    return;
-  if (reconnectTrys <= 5) {
-    reconnectTrys++;
-    await connect();
-  }
-  else {
-    addLog("连接失败！");
-    reconnectTrys = 0;
-  }
 }
 
 async function write(cmd, data, withResponse=true) {
@@ -58,10 +39,6 @@ async function write(cmd, data, withResponse=true) {
     if (data instanceof Uint8Array) data = Array.from(data);
     payload.push(...data)
   }
-  if (payload.length > MAX_PACKET_SIZE) {
-    addLog("BLE packet too large!");
-    return false;
-  }
   addLog(`<span class="action">⇑</span> ${bytes2hex(payload)}`);
   try {
     if (withResponse)
@@ -70,16 +47,16 @@ async function write(cmd, data, withResponse=true) {
       await epdCharacteristic.writeValueWithoutResponse(Uint8Array.from(payload));
   } catch (e) {
     console.error(e);
-    if (e.message) addLog(e.message);
+    if (e.message) addLog("write: " + e.message);
     return false;
   }
   return true;
 }
 
 async function epdWrite(cmd, data) {
-  const chunkSize = MAX_PACKET_SIZE - 1;
-  const count = Math.round(data.length / chunkSize);
+  const chunkSize = document.getElementById('mtusize').value - 1;
   const interleavedCount = document.getElementById('interleavedcount').value;
+  const count = Math.round(data.length / chunkSize);
   let chunkIdx = 0;
   let noReplyCount = interleavedCount;
 
@@ -133,60 +110,35 @@ async function sendcmd() {
   await write(bytes[0], bytes.length > 1 ? bytes.slice(1) : null);
 }
 
-async function send4GrayLut() {
-  await epdWrite(0x20, "000A0000000160141400000100140000000100130A010001000000000000000000000000000000000000"); // vcom
-  await epdWrite(0x21, "400A0000000190141400000110140A000001A01301000001000000000000000000000000000000000000"); // red not use
-  await epdWrite(0x22, "400A0000000190141400000100140A000001990C01030401000000000000000000000000000000000000"); // bw r
-  await epdWrite(0x23, "400A0000000190141400000100140A000001990B04040101000000000000000000000000000000000000"); // wb w
-  await epdWrite(0x24, "800A0000000190141400000120140A000001501301000001000000000000000000000000000000000000"); // bb b
-  await epdWrite(0x25, "400A0000000190141400000110140A000001A01301000001000000000000000000000000000000000000"); // vcom
-}
-
-function getImageData(canvas, driver, mode) {
-  if (mode === '4gray') {
-    return canvas2gray(canvas);
-  } else {
-    let data = canvas2bytes(canvas, 'bw');
-    if (mode.startsWith('bwr')) {
-      const invert = (driver === '02') || (driver === '05');
-      data.push(...canvas2bytes(canvas, 'red', invert));
-    }
-    return data;
-  }
-}
-
 async function sendimg() {
-  startTime = new Date().getTime();
-  const canvas = document.getElementById("canvas");
+  const status = document.getElementById("status");
   const driver = document.getElementById("epddriver").value;
   const mode = document.getElementById('dithering').value;
-  const imgArray = getImageData(canvas, driver, mode);
-  const ramSize = canvas.width * canvas.height / 8;
 
   if (mode === '') {
-    addLog('请选择一种取模算法！');
+    alert('请选择一种取模算法！');
     return;
   }
 
-  if (imgArray.length === ramSize * 2) {
-    await epdWrite(driver === "02" ? 0x24 : 0x10, imgArray.slice(0, ramSize));
-    await epdWrite(driver === "02" ? 0x26 : 0x13, imgArray.slice(ramSize));
+  startTime = new Date().getTime();
+  status.parentElement.style.display = "block";
+
+  if (mode.startsWith('bwr')) {
+    const invert = (driver === '02') || (driver === '05');
+    await epdWrite(driver === "02" ? 0x24 : 0x10, canvas2bytes(canvas, 'bw'));
+    await epdWrite(driver === "02" ? 0x26 : 0x13, canvas2bytes(canvas, 'red', invert));
   } else {
-    await epdWrite(driver === "04" ? 0x24 : 0x13, imgArray);
+    await epdWrite(driver === "04" ? 0x24 : 0x13, canvas2bytes(canvas, 'bw'));
   }
 
-  if (mode === "4gray") {
-    await epdWrite(0x00, [0x3F]); // Load LUT from register
-    await send4GrayLut();
-    await write(EpdCmd.DISPLAY);
-    await epdWrite(0x00, [0x1F]); // Load LUT from OTP
-  } else {
-    await write(EpdCmd.DISPLAY);
-  }
+  await write(EpdCmd.REFRESH);
 
   const sendTime = (new Date().getTime() - startTime) / 1000.0;
   addLog(`发送完成！耗时: ${sendTime}s`);
   setStatus(`发送完成！耗时: ${sendTime}s`);
+  setTimeout(() => {
+    status.parentElement.style.display = "none";
+  }, 5000);
 }
 
 function updateButtonStatus() {
@@ -215,7 +167,7 @@ async function preConnect() {
     }
   }
   else {
-    reconnectTrys = 0;
+    resetVariables();
     try {
       bleDevice = await navigator.bluetooth.requestDevice({
         optionalServices: ['62750001-d828-918d-fb46-b6c11c675aec'],
@@ -223,21 +175,20 @@ async function preConnect() {
       });
     } catch (e) {
       console.error(e);
-      if (e.message) addLog(e.message);
+      if (e.message) addLog("requestDevice: " + e.message);
+      addLog("请检查蓝牙是否已开启，且使用的浏览器支持蓝牙！建议使用以下浏览器：");
+      addLog("• 电脑: Chrome/Edge");
+      addLog("• Android: Chrome/Edge");
+      addLog("• iOS: Bluefy 浏览器");
       return;
     }
 
     await bleDevice.addEventListener('gattserverdisconnected', disconnect);
-    try {
-      await connect();
-    } catch (e) {
-      await handleError(e);
-    }
+    setTimeout(async function () { await connect(); }, 300);
   }
 }
 
 async function reConnect() {
-  reconnectTrys = 0;
   if (bleDevice != null && bleDevice.gatt.connected)
     bleDevice.gatt.disconnect();
   resetVariables();
@@ -245,32 +196,55 @@ async function reConnect() {
   setTimeout(async function () { await connect(); }, 300);
 }
 
-async function connect() {
-  if (epdCharacteristic == null && bleDevice != null) {
-    addLog("正在连接: " + bleDevice.name);
+function handleNotify(value, idx) {
+  const data = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  if (idx == 0) {
+    addLog(`收到配置：${bytes2hex(data)}`);
+    const epdpins = document.getElementById("epdpins");
+    const epddriver = document.getElementById("epddriver");
+    epdpins.value = bytes2hex(data.slice(0, 7));
+    if (data.length > 10) epdpins.value += bytes2hex(data.slice(10, 11));
+    epddriver.value = bytes2hex(data.slice(7, 8));
+    filterDitheringOptions();
+  } else {
+    if (textDecoder == null) textDecoder = new TextDecoder();
+    const msg = textDecoder.decode(data);
+    addLog(`<span class="action">⇓</span> ${msg}`);
+  }
+}
 
+async function connect() {
+  if (bleDevice == null || epdCharacteristic != null) return;
+
+  try {
+    addLog("正在连接: " + bleDevice.name);
     gattServer = await bleDevice.gatt.connect();
     addLog('  找到 GATT Server');
-
     epdService = await gattServer.getPrimaryService('62750001-d828-918d-fb46-b6c11c675aec');
     addLog('  找到 EPD Service');
-
     epdCharacteristic = await epdService.getCharacteristic('62750002-d828-918d-fb46-b6c11c675aec');
     addLog('  找到 Characteristic');
+  } catch (e) {
+    console.error(e);
+    if (e.message) addLog("connect: " + e.message);
+    disconnect();
+    return;
+  }
 
+  try {
     await epdCharacteristic.startNotifications();
     epdCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
-      addLog(`<span class="action">⇓</span> ${bytes2hex(event.target.value.buffer)}`);
-      document.getElementById("epdpins").value = bytes2hex(event.target.value.buffer.slice(0, 7));
-      document.getElementById("epddriver").value = bytes2hex(event.target.value.buffer.slice(7, 8));
-      filterDitheringOptions();
+      handleNotify(event.target.value, msgIndex++);
     });
-
-    await write(EpdCmd.INIT);
-
-    document.getElementById("connectbutton").innerHTML = '断开';
-    updateButtonStatus();
+  } catch (e) {
+    console.error(e);
+    if (e.message) addLog("startNotifications: " + e.message);
   }
+
+  await write(EpdCmd.INIT);
+
+  document.getElementById("connectbutton").innerHTML = '断开';
+  updateButtonStatus();
 }
 
 function setStatus(statusText) {
@@ -315,9 +289,6 @@ function intToHex(intIn) {
 }
 
 async function update_image() {
-  const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d");
-
   let image = new Image();;
   const image_file = document.getElementById('image_file');
   if (image_file.files.length > 0) {
@@ -336,21 +307,17 @@ async function update_image() {
 
 function clear_canvas() {
   if(confirm('确认清除画布内容?')) {
-    const ctx = canvas.getContext("2d");
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 }
 
 function convert_dithering() {
-  const ctx = canvas.getContext("2d");
   const mode = document.getElementById('dithering').value;
   if (mode === '') return;
 
   if (mode.startsWith('bwr')) {
     ditheringCanvasByPalette(canvas, bwrPalette, mode);
-  } else if (mode === '4gray') {
-    dithering(ctx, canvas.width, canvas.height, 4, "gray");
   } else {
     dithering(ctx, canvas.width, canvas.height, parseInt(document.getElementById('threshold').value), mode);
   }
@@ -372,10 +339,31 @@ function filterDitheringOptions() {
   dithering.value = '';
 }
 
+function checkDebugMode() {
+  const link = document.getElementById('debug-toggle');
+  const urlParams = new URLSearchParams(window.location.search);
+  const debugMode = urlParams.get('debug');
+  
+  if (debugMode === 'true') {
+      document.body.classList.add('debug-mode');
+      link.innerHTML = '正常模式';
+      link.setAttribute('href', window.location.pathname);
+      addLog("注意：开发模式功能已开启！不懂请不要随意修改，否则后果自负！");
+  } else {
+      document.body.classList.remove('debug-mode');
+      link.innerHTML = '开发模式';
+      link.setAttribute('href', window.location.pathname + '?debug=true');
+  }
+}
+
 document.body.onload = () => {
+  textDecoder = null;
   canvas = document.getElementById('canvas');
+  ctx = canvas.getContext("2d");
 
   updateButtonStatus();
   update_image();
   filterDitheringOptions();
+
+  checkDebugMode();
 }

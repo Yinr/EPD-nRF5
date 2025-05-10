@@ -1,17 +1,31 @@
-﻿#include "Adafruit_GFX.h"
 #include "fonts.h"
 #include "Lunar.h"
 #include "GUI.h"
-#include "nrf.h"
-#include "nrf_log.h"
 #include <stdio.h>
-
-#define PAGE_HEIGHT ((__HEAP_SIZE / 50) - 4)
 
 #define GFX_printf_styled(gfx, fg, bg, font, ...) \
             GFX_setTextColor(gfx, fg, bg);        \
             GFX_setFont(gfx, font);               \
             GFX_printf(gfx, __VA_ARGS__);
+
+static void DrawBattery(Adafruit_GFX *gfx, int16_t x, int16_t y, float voltage)
+{
+    uint8_t level = (uint8_t)(voltage * 100 / 4.2);
+    GFX_setCursor(gfx, x - 26, y + 9);
+    GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    GFX_printf(gfx, "%.1fV", voltage);
+    GFX_fillRect(gfx, x, y, 20, 10, GFX_WHITE);
+    GFX_drawRect(gfx, x, y, 20, 10, GFX_BLACK);
+    GFX_fillRect(gfx, x + 20, y + 4, 2, 2, GFX_BLACK);
+    GFX_fillRect(gfx, x + 2, y + 2, 16 * level / 100, 6, GFX_BLACK);
+}
+
+static void DrawTemperature(Adafruit_GFX *gfx, int16_t x, int16_t y, int8_t temp)
+{
+    GFX_setCursor(gfx, x, y);
+    GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    GFX_printf(gfx, "%d℃", temp);
+}
 
 static void DrawDate(Adafruit_GFX *gfx, int16_t x, int16_t y, tm_t *tm)
 {
@@ -24,11 +38,13 @@ static void DrawDate(Adafruit_GFX *gfx, int16_t x, int16_t y, tm_t *tm)
     GFX_printf_styled(gfx, GFX_BLACK, GFX_WHITE, u8g2_font_wqy12_t_lunar, "日 ");
 }
 
-static void DrawDateHeader(Adafruit_GFX *gfx, int16_t x, int16_t y, tm_t *tm, struct Lunar_Date *Lunar)
+static void DrawDateHeader(Adafruit_GFX *gfx, int16_t x, int16_t y, tm_t *tm, struct Lunar_Date *Lunar, gui_data_t *data)
 {
     DrawDate(gfx, x, y, tm);
     GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
     GFX_printf(gfx, "星期%s", Lunar_DayString[tm->tm_wday]);
+
+    DrawBattery(gfx, 365, 4, data->voltage);
 
     GFX_setCursor(gfx, x + 270, y);
     GFX_printf(gfx, "%s%s%s %s%s", Lunar_MonthLeapString[Lunar->IsLeap], Lunar_MonthString[Lunar->Month],
@@ -96,9 +112,9 @@ static void DrawMonthDays(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar)
     }
 }
 
-static void DrawCalendar(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar)
+static void DrawCalendar(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar, gui_data_t *data)
 {
-    DrawDateHeader(gfx, 10, 28, tm, Lunar);
+    DrawDateHeader(gfx, 10, 28, tm, Lunar, data);
     DrawWeekHeader(gfx, 10, 32);
     DrawMonthDays(gfx, tm, Lunar);
 }
@@ -129,9 +145,9 @@ static void Draw7Number(Adafruit_GFX *gfx, int n, unsigned int xLoc, unsigned in
         if (seg[j][2])for(w=S2,t=seg[j][1]+S3,h=seg[j][1]+cS,a=xLoc+seg[j][0]+cS,b=seg[j][1];b<h;b++,a--,w+=2)GFX_drawFastHLine(gfx,a,b,w,col);
         else for(w=S4,t=xLoc+seg[j][0]+S3,h=xLoc+seg[j][0]+cS,b=xLoc+seg[j][0],a=seg[j][1]+cS;b<h;b++,a--,w+=2)GFX_drawFastVLine(gfx,b,a,w,col);
         for (;b<t;b++,a++,w-=2)seg[j][2]?GFX_drawFastHLine(gfx,a,b,w,col):GFX_drawFastVLine(gfx,b,a,w,col);
-      }
+        }
     }
-  }
+}
 
 static void DrawTime(Adafruit_GFX *gfx, tm_t *tm, int16_t x, int16_t y, uint16_t cS, uint16_t nD)
 {
@@ -143,27 +159,7 @@ static void DrawTime(Adafruit_GFX *gfx, tm_t *tm, int16_t x, int16_t y, uint16_t
     Draw7Number(gfx, tm->tm_min, x, y, cS, GFX_BLACK, GFX_WHITE, nD);
 }
 
-static void DrawBattery(Adafruit_GFX *gfx, int16_t x, int16_t y)
-{
-    float vol = EPD_ReadVoltage();
-    uint8_t level = (uint8_t)(vol * 100 / 4.2);
-    GFX_setCursor(gfx, x - 26, y + 9);
-    GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
-    GFX_printf(gfx, "%.1fV", vol);
-    GFX_fillRect(gfx, x, y, 20, 10, GFX_WHITE);
-    GFX_drawRect(gfx, x, y, 20, 10, GFX_BLACK);
-    GFX_fillRect(gfx, x + 20, y + 4, 2, 2, GFX_BLACK);
-    GFX_fillRect(gfx, x + 2, y + 2, 16 * level / 100, 6, GFX_BLACK);
-}
-
-static void DrawTemperature(Adafruit_GFX *gfx, int16_t x, int16_t y, int8_t temp)
-{
-    GFX_setCursor(gfx, x, y);
-    GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
-    GFX_printf(gfx, "%d℃", temp);
-}
-
-static void DrawClock(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar, int8_t temp)
+static void DrawClock(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar, gui_data_t *data)
 {
     DrawDate(gfx, 40, 36, tm);
     GFX_setCursor(gfx, 40, 58);
@@ -173,8 +169,8 @@ static void DrawClock(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar, int
     GFX_printf(gfx, "%s%s%s", Lunar_MonthLeapString[Lunar->IsLeap], Lunar_MonthString[Lunar->Month],
         Lunar_DateString[Lunar->Date]);
 
-    DrawBattery(gfx, 330, 25);
-    DrawTemperature(gfx, 330, 58, temp);
+    DrawBattery(gfx, 330, 25, data->voltage);
+    DrawTemperature(gfx, 330, 58, data->temperature);
 
     GFX_drawFastHLine(gfx, 30, 68, 330, GFX_BLACK);
     DrawTime(gfx, tm, 70, 98, 5, 2);
@@ -198,41 +194,37 @@ static void DrawClock(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar, int
     }
 }
 
-void DrawGUI(epd_model_t *epd, uint32_t timestamp, display_mode_t mode)
+void DrawGUI(gui_data_t *data, buffer_callback draw, display_mode_t mode)
 {
     tm_t tm = {0};
     struct Lunar_Date Lunar;
 
-    transformTime(timestamp, &tm);
-    LUNAR_SolarToLunar(&Lunar, tm.tm_year + YEAR0, tm.tm_mon + 1, tm.tm_mday);
+    transformTime(data->timestamp, &tm);
 
     Adafruit_GFX gfx;
 
-    if (epd->bwr)
-      GFX_begin_3c(&gfx, epd->width, epd->height, PAGE_HEIGHT);
+    if (data->bwr)
+      GFX_begin_3c(&gfx, data->width, data->height, PAGE_HEIGHT);
     else
-      GFX_begin(&gfx, epd->width, epd->height, PAGE_HEIGHT);
+      GFX_begin(&gfx, data->width, data->height, PAGE_HEIGHT);
 
     GFX_firstPage(&gfx);
     do {
-        NRF_LOG_DEBUG("page %d\n", gfx.current_page);
         GFX_fillScreen(&gfx, GFX_WHITE);
+
+        LUNAR_SolarToLunar(&Lunar, tm.tm_year + YEAR0, tm.tm_mon + 1, tm.tm_mday);
 
         switch (mode) {
             case MODE_CALENDAR:
-                DrawCalendar(&gfx, &tm, &Lunar);
+                DrawCalendar(&gfx, &tm, &Lunar, data);
                 break;
             case MODE_CLOCK:
-                DrawClock(&gfx, &tm, &Lunar, epd->drv->read_temp());
+                DrawClock(&gfx, &tm, &Lunar, data);
                 break;
             default:
                 break;
         }
-    } while(GFX_nextPage(&gfx, epd->drv->write_image));
+    } while(GFX_nextPage(&gfx, draw));
 
     GFX_end(&gfx);
-
-    NRF_LOG_DEBUG("display start\n");
-    epd->drv->refresh();
-    NRF_LOG_DEBUG("display end\n");
 }

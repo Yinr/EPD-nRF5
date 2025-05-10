@@ -13,8 +13,6 @@
 ******************************************************************************/
 
 #include "app_error.h"
-#include "nrf_delay.h"
-#include "nrf_gpio.h"
 #include "nrf_drv_spi.h"
 #include "EPD_driver.h"
 #include "nrf_log.h"
@@ -32,11 +30,22 @@ static uint32_t EPD_BS_PIN = 13;
 static uint32_t EPD_EN_PIN = 0xFF;
 static uint32_t EPD_LED_PIN = 0xFF;
 
-// EPD model
-static epd_model_t *EPD = NULL;
+#define SPI_INSTANCE  0 /**< SPI instance index. */
+static const nrf_drv_spi_t spi = NRF_DRV_SPI_INSTANCE(SPI_INSTANCE);  /**< SPI instance. */
+
+#if defined(S112)
+#define HAL_SPI_INSTANCE spi.u.spi.p_reg
+#else
+#define HAL_SPI_INSTANCE spi.p_registers
+nrf_gpio_pin_dir_t nrf_gpio_pin_dir_get(uint32_t pin)
+{
+    NRF_GPIO_Type * reg = nrf_gpio_pin_port_decode(&pin);
+    return (nrf_gpio_pin_dir_t)((reg->PIN_CNF[pin] &
+                                 GPIO_PIN_CNF_DIR_Msk) >> GPIO_PIN_CNF_DIR_Pos);
+}
+#endif
 
 // Arduino like function wrappers
-
 void pinMode(uint32_t pin, uint32_t mode)
 {
     switch (mode)
@@ -60,43 +69,31 @@ void pinMode(uint32_t pin, uint32_t mode)
     }
 }
 
-void digitalWrite(uint32_t pin, uint32_t value)
+// GPIO
+static uint16_t m_driver_refs = 0;
+
+void EPD_GPIO_Load(epd_config_t *cfg)
 {
-    if (value == LOW)
-        nrf_gpio_pin_clear(pin);
-    else
-        nrf_gpio_pin_set(pin);
+    if (cfg == NULL) return;
+    EPD_MOSI_PIN = cfg->mosi_pin;
+    EPD_SCLK_PIN = cfg->sclk_pin;
+    EPD_CS_PIN = cfg->cs_pin;
+    EPD_DC_PIN = cfg->dc_pin;
+    EPD_RST_PIN = cfg->rst_pin;
+    EPD_BUSY_PIN = cfg->busy_pin;
+    EPD_BS_PIN = cfg->bs_pin;
+    EPD_EN_PIN = cfg->en_pin;
+    EPD_LED_PIN = cfg->led_pin;
 }
 
-uint32_t digitalRead(uint32_t pin)
+void EPD_GPIO_Init(void)
 {
-#if defined(S112)
-    nrf_gpio_pin_dir_t dir = nrf_gpio_pin_dir_get(pin);
-#else
-    NRF_GPIO_Type * reg = nrf_gpio_pin_port_decode(&pin);
-    nrf_gpio_pin_dir_t dir = (nrf_gpio_pin_dir_t)((reg->PIN_CNF[pin] &
-                                                   GPIO_PIN_CNF_DIR_Msk) >> GPIO_PIN_CNF_DIR_Pos);
-#endif
-    if (dir == NRF_GPIO_PIN_DIR_INPUT)
-        return nrf_gpio_pin_read(pin);
-    else
-        return nrf_gpio_pin_out_read(pin);
-}
+    if (m_driver_refs++ > 0) return;
 
-void delay(uint32_t ms)
-{
-    nrf_delay_ms(ms);
-}
+    pinMode(EPD_DC_PIN, OUTPUT);
+    pinMode(EPD_RST_PIN, OUTPUT);
+    pinMode(EPD_BUSY_PIN, INPUT);
 
-// Hardware SPI (write only)
-
-#define SPI_INSTANCE  0 /**< SPI instance index. */
-static const nrf_drv_spi_t spi = NRF_DRV_SPI_INSTANCE(SPI_INSTANCE);  /**< SPI instance. */
-static bool spi_initialized = false;
-
-static void EPD_SPI_Init(void)
-{
-    if (spi_initialized) return;
     nrf_drv_spi_config_t spi_config = NRF_DRV_SPI_DEFAULT_CONFIG;
     spi_config.sck_pin = EPD_SCLK_PIN;
     spi_config.mosi_pin = EPD_MOSI_PIN;
@@ -106,91 +103,85 @@ static void EPD_SPI_Init(void)
 #else
     APP_ERROR_CHECK(nrf_drv_spi_init(&spi, &spi_config, NULL));
 #endif
-    spi_initialized = true;
+
+    if (EPD_BS_PIN != 0xFF) {
+        pinMode(EPD_BS_PIN, OUTPUT);
+        digitalWrite(EPD_BS_PIN, LOW);
+    }
+    if (EPD_EN_PIN != 0xFF) {
+        pinMode(EPD_EN_PIN, OUTPUT);
+        digitalWrite(EPD_EN_PIN, HIGH);
+    }
+
+    digitalWrite(EPD_DC_PIN, LOW);
+    digitalWrite(EPD_RST_PIN, HIGH);
+
+    if (EPD_LED_PIN != 0xFF)
+        pinMode(EPD_LED_PIN, OUTPUT);
+
+    EPD_LED_ON();
 }
 
-static void EPD_SPI_Uninit(void)
+void EPD_GPIO_Uninit(void)
 {
-    if (!spi_initialized) return;
+    if (--m_driver_refs > 0) return;
+
+    EPD_LED_OFF();
+
     nrf_drv_spi_uninit(&spi);
-    spi_initialized = false;
+
+    digitalWrite(EPD_DC_PIN, LOW);
+    digitalWrite(EPD_CS_PIN, LOW);
+    digitalWrite(EPD_RST_PIN, LOW);
+    if (EPD_EN_PIN != 0xFF)
+        digitalWrite(EPD_EN_PIN, LOW);
+
+    // reset pin state
+    pinMode(EPD_MOSI_PIN, DEFAULT);
+    pinMode(EPD_SCLK_PIN, DEFAULT);
+    pinMode(EPD_CS_PIN, DEFAULT);
+    pinMode(EPD_DC_PIN, DEFAULT);
+    pinMode(EPD_RST_PIN, DEFAULT);
+    pinMode(EPD_BUSY_PIN, DEFAULT);
+    pinMode(EPD_BS_PIN, DEFAULT);
+    pinMode(EPD_EN_PIN, DEFAULT);
+    pinMode(EPD_LED_PIN, DEFAULT);
+}
+
+// SPI
+void EPD_SPI_WriteBytes(uint8_t *value, uint8_t len)
+{
+    nrf_gpio_pin_dir_t dir = nrf_gpio_pin_dir_get(EPD_MOSI_PIN);
+    if (dir != NRF_GPIO_PIN_DIR_OUTPUT) {
+        pinMode(EPD_MOSI_PIN, OUTPUT);
+        nrf_spi_pins_set(HAL_SPI_INSTANCE, EPD_SCLK_PIN, EPD_MOSI_PIN, NRF_SPI_PIN_NOT_CONNECTED);
+    }
+    APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi, value, len, NULL, 0));
+}
+
+void EPD_SPI_ReadBytes(uint8_t *value, uint8_t len)
+{
+    nrf_gpio_pin_dir_t dir = nrf_gpio_pin_dir_get(EPD_MOSI_PIN);
+    if (dir != NRF_GPIO_PIN_DIR_INPUT) {
+        pinMode(EPD_MOSI_PIN, INPUT);
+        nrf_spi_pins_set(HAL_SPI_INSTANCE, EPD_SCLK_PIN, NRF_SPI_PIN_NOT_CONNECTED, EPD_MOSI_PIN);
+    }
+    APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi, NULL, 0, value, len));
 }
 
 void EPD_SPI_WriteByte(uint8_t value)
 {
-    EPD_SPI_Init();
-    APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi, &value, 1, NULL, 0));
+    EPD_SPI_WriteBytes(&value, 1);
 }
 
-void EPD_SPI_WriteBytes(uint8_t *value, uint8_t len)
+uint8_t EPD_SPI_ReadByte(void)
 {
-    EPD_SPI_Init();
-    APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi, value, len, NULL, 0));
+    uint8_t data;
+    EPD_SPI_ReadBytes(&data, 1);
+    return data;
 }
 
-
-// Software SPI (read / write)
-void EPD_SPI_WriteByte_SW(uint8_t data)
-{
-    EPD_SPI_Uninit();
-    pinMode(EPD_MOSI_PIN, OUTPUT);
-    digitalWrite(EPD_CS_PIN, LOW);
-    for (int i = 0; i < 8; i++)
-    {
-        if ((data & 0x80) == 0) digitalWrite(EPD_MOSI_PIN, LOW); 
-        else                    digitalWrite(EPD_MOSI_PIN, HIGH);
-
-        data <<= 1;
-        digitalWrite(EPD_SCLK_PIN, HIGH);     
-        digitalWrite(EPD_SCLK_PIN, LOW);
-    }
-    digitalWrite(EPD_CS_PIN, HIGH);
-}
-
-uint8_t EPD_SPI_ReadByte_SW(void)
-{
-    EPD_SPI_Uninit();
-    uint8_t j = 0xff;
-    pinMode(EPD_MOSI_PIN, INPUT);
-    digitalWrite(EPD_CS_PIN, LOW);
-    for (int i = 0; i < 8; i++)
-    {
-        j = j << 1;
-        if (digitalRead(EPD_MOSI_PIN))  j = j | 0x01;
-        else                            j = j & 0xfe;
-        
-        digitalWrite(EPD_SCLK_PIN, HIGH);     
-        digitalWrite(EPD_SCLK_PIN, LOW);
-    }
-    digitalWrite(EPD_CS_PIN, HIGH);
-    pinMode(EPD_MOSI_PIN, 1);
-    return j;
-}
-
-void EPD_WriteCommand_SW(uint8_t Reg)
-{
-    digitalWrite(EPD_DC_PIN, LOW);
-    digitalWrite(EPD_CS_PIN, LOW);
-    EPD_SPI_WriteByte_SW(Reg);
-    digitalWrite(EPD_CS_PIN, HIGH);
-}
-
-void EPD_WriteByte_SW(uint8_t Data)
-{
-    digitalWrite(EPD_DC_PIN, HIGH);
-    digitalWrite(EPD_CS_PIN, LOW);
-    EPD_SPI_WriteByte_SW(Data);
-    digitalWrite(EPD_CS_PIN, HIGH);
-}
-
-uint8_t EPD_ReadByte_SW(void)
-{
-    digitalWrite(EPD_DC_PIN, HIGH);
-    return EPD_SPI_ReadByte_SW();
-}
-
-
-// Hardware SPI
+// EPD
 void EPD_WriteCommand(uint8_t Reg)
 {
     digitalWrite(EPD_DC_PIN, LOW);
@@ -207,6 +198,12 @@ void EPD_WriteData(uint8_t *Data, uint8_t Len)
 {
     digitalWrite(EPD_DC_PIN, HIGH);
     EPD_SPI_WriteBytes(Data, Len);
+}
+
+uint8_t EPD_ReadByte(void)
+{
+    digitalWrite(EPD_DC_PIN, HIGH);
+    return EPD_SPI_ReadByte();
 }
 
 void EPD_Reset(uint32_t value, uint16_t duration)
@@ -240,69 +237,6 @@ void EPD_WaitBusy(uint32_t value, uint16_t timeout)
         EPD_LED_ON();
     else
         EPD_LED_OFF();
-}
-
-// GPIO
-void EPD_GPIO_Load(epd_config_t *cfg)
-{
-    if (cfg == NULL) return;
-    EPD_MOSI_PIN = cfg->mosi_pin;
-    EPD_SCLK_PIN = cfg->sclk_pin;
-    EPD_CS_PIN = cfg->cs_pin;
-    EPD_DC_PIN = cfg->dc_pin;
-    EPD_RST_PIN = cfg->rst_pin;
-    EPD_BUSY_PIN = cfg->busy_pin;
-    EPD_BS_PIN = cfg->bs_pin;
-    EPD_EN_PIN = cfg->en_pin;
-    EPD_LED_PIN = cfg->led_pin;
-}
-
-void EPD_GPIO_Init(void)
-{
-    pinMode(EPD_CS_PIN, OUTPUT);
-    pinMode(EPD_DC_PIN, OUTPUT);
-    pinMode(EPD_RST_PIN, OUTPUT);
-    pinMode(EPD_BUSY_PIN, INPUT);
-
-    if (EPD_EN_PIN != 0xFF) {
-        pinMode(EPD_EN_PIN, OUTPUT);
-        digitalWrite(EPD_EN_PIN, HIGH);
-    }
-
-    pinMode(EPD_BS_PIN, OUTPUT);
-    digitalWrite(EPD_BS_PIN, LOW);
-
-    digitalWrite(EPD_DC_PIN, LOW);
-    digitalWrite(EPD_CS_PIN, LOW);
-    digitalWrite(EPD_RST_PIN, HIGH);
-
-    if (EPD_LED_PIN != 0xFF)
-        pinMode(EPD_LED_PIN, OUTPUT);
-}
-
-void EPD_GPIO_Uninit(void)
-{
-    EPD_LED_OFF();
-
-    digitalWrite(EPD_DC_PIN, LOW);
-    digitalWrite(EPD_CS_PIN, LOW);
-    digitalWrite(EPD_RST_PIN, LOW);
-    if (EPD_EN_PIN != 0xFF) {
-        digitalWrite(EPD_EN_PIN, LOW);
-    }
-
-    EPD_SPI_Uninit();
-
-    // reset pin state
-    pinMode(EPD_MOSI_PIN, DEFAULT);
-    pinMode(EPD_SCLK_PIN, DEFAULT);
-    pinMode(EPD_CS_PIN, DEFAULT);
-    pinMode(EPD_DC_PIN, DEFAULT);
-    pinMode(EPD_RST_PIN, DEFAULT);
-    pinMode(EPD_BUSY_PIN, DEFAULT);
-    pinMode(EPD_BS_PIN, DEFAULT);
-    pinMode(EPD_EN_PIN, DEFAULT);
-    pinMode(EPD_LED_PIN, DEFAULT);
 }
 
 // lED
@@ -395,19 +329,33 @@ static epd_model_t *epd_models[] = {
     &epd_uc8276_420_bwr,
 };
 
+// EPD model
+static epd_model_t EPD;
+
 epd_model_t *epd_get(void)
 {
-    return EPD == NULL ? epd_models[0] : EPD;
+    return &EPD;
 }
 
-epd_model_t *epd_init(epd_model_id_t id)
+#define INVERT_B       BIT(0)
+#define INVERT_R       BIT(1)
+
+epd_model_t *epd_init(epd_model_id_t id, uint8_t invert)
 {
+    epd_model_t *model = NULL;
     for (uint8_t i = 0; i < ARRAY_SIZE(epd_models); i++) {
         if (epd_models[i]->id == id) {
-            EPD = epd_models[i];
+            model = epd_models[i];
         }
     }
-    if (EPD == NULL) EPD = epd_models[0];
-    EPD->drv->init();
-    return EPD;
+    if (model == NULL) model = epd_models[0];
+    memcpy(&EPD, model, sizeof(epd_model_t));
+
+    if (invert != 0xFF) {
+        EPD.invert_black = (invert & INVERT_B) ? true : false;
+        EPD.invert_color = (invert & INVERT_R) ? true : false;
+    }
+    EPD.drv->init();
+
+    return &EPD;
 }

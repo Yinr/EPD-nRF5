@@ -56,23 +56,29 @@
 #define PSR_SHD       BIT(1)
 #define PSR_RST       BIT(0)
 
+static void UC8176_WaitBusy(uint16_t timeout)
+{
+    EPD_WaitBusy(LOW, timeout);
+}
+
 static void UC8176_PowerOn(void)
 {
     EPD_WriteCommand(CMD_PON);
-    EPD_WaitBusy(LOW, 100);
+    UC8176_WaitBusy(100);
 }
 
 static void UC8176_PowerOff(void)
 {
     EPD_WriteCommand(CMD_POF);
-    EPD_WaitBusy(LOW, 100);
+    UC8176_WaitBusy(100);
 }
 
 // Read temperature from driver chip
 int8_t UC8176_Read_Temp(void)
 {
-    EPD_WriteCommand_SW(CMD_TSC);
-    return (int8_t) EPD_ReadByte_SW();
+    EPD_WriteCommand(CMD_TSC);
+    UC8176_WaitBusy(100);
+    return (int8_t) EPD_ReadByte();
 }
 
 // Force temperature (will trigger OTP LUT switch)
@@ -95,7 +101,7 @@ void UC8176_Refresh(void)
     NRF_LOG_DEBUG("[EPD]: temperature: %d\n", UC8176_Read_Temp());
     EPD_WriteCommand(CMD_DRF);
     delay(100);
-    EPD_WaitBusy(LOW, 30000);
+    UC8176_WaitBusy(30000);
     UC8176_PowerOff();
     NRF_LOG_DEBUG("[EPD]: refresh end\n");
 }
@@ -152,7 +158,7 @@ parameter:
 void UC8176_Clear(void)
 {
     epd_model_t *EPD = epd_get();
-    UC8176_Write_RAM(CMD_DTM1, 0xFF);
+    UC8176_Write_RAM(CMD_DTM1, EPD->invert_black ? 0x00 : 0xFF);
     UC8176_Write_RAM(CMD_DTM2, EPD->invert_color ? 0x00 : 0xFF);
     UC8176_Refresh();
 }
@@ -182,13 +188,15 @@ void UC8176_Write_Image(uint8_t *black, uint8_t *color, uint16_t x, uint16_t y, 
     x -= x % 8; // byte boundary
     w = wb * 8; // byte boundary
     if (x + w > EPD->width || y + h > EPD->height) return;
+
     EPD_WriteCommand(CMD_PTIN); // partial in
     _setPartialRamArea(x, y, w, h);
     if (EPD->bwr) {
         EPD_WriteCommand(CMD_DTM1);
         for (uint16_t i = 0; i < h; i++) {
             for (uint16_t j = 0; j < w / 8; j++) {
-                EPD_WriteByte(black ? black[j + i * wb] : 0xFF);
+                uint8_t data = black ? black[j + i * wb] : 0xFF;
+                EPD_WriteByte(EPD->invert_black ? ~data : data);
             }
         }
     }
@@ -236,6 +244,7 @@ const epd_model_t epd_uc8176_420_bw = {
     .width = 400,
     .height = 300,
     .bwr = false,
+    .invert_black = false,
     .invert_color = false,
 };
 
@@ -246,6 +255,7 @@ const epd_model_t epd_uc8176_420_bwr = {
     .width = 400,
     .height = 300,
     .bwr = true,
+    .invert_black = false,
     .invert_color = false,
 };
 
@@ -256,5 +266,6 @@ const epd_model_t epd_uc8276_420_bwr = {
     .width = 400,
     .height = 300,
     .bwr = true,
+    .invert_black = false,
     .invert_color = true,
 };

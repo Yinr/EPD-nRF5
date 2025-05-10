@@ -16,10 +16,10 @@ typedef struct
     uint8_t wakeup_pin;
     uint8_t led_pin;
     uint8_t en_pin;
+    uint8_t invert;
 } epd_config_t;
 
 #define EPD_CONFIG_SIZE (sizeof(epd_config_t) / sizeof(uint8_t))
-#define EPD_CONFIG_EMPTY 0xFF
     
 void epd_config_init(epd_config_t *cfg);
 void epd_config_read(epd_config_t *cfg);
