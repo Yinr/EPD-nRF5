@@ -20,6 +20,8 @@ const EpdCmd = {
   CFG_ERASE:  0x99,
 };
 
+const RedInvertDriver = ["02", "05"];
+
 function resetVariables() {
   gattServer = null;
   epdService = null;
@@ -78,8 +80,21 @@ async function epdWrite(cmd, data) {
 }
 
 async function setDriver() {
+  if (!epdCharacteristic) return;
+  const driver = document.getElementById("epddriver").value;
+  const invert = document.getElementById("epdinvert").checked;
+  let opt = driver;
+  if (RedInvertDriver.includes(driver)) {
+    opt += invert ? "03" : "02";
+  } else {
+    opt += invert ? "01" : "00";
+  }
+  await write(EpdCmd.INIT, opt);
+}
+
+async function setPins() {
   await write(EpdCmd.SET_PINS, document.getElementById("epdpins").value);
-  await write(EpdCmd.INIT, document.getElementById("epddriver").value);
+  await setDriver();
 }
 
 async function syncTime(mode) {
@@ -124,7 +139,7 @@ async function sendimg() {
   status.parentElement.style.display = "block";
 
   if (mode.startsWith('bwr')) {
-    const invert = (driver === '02') || (driver === '05');
+    const invert = (RedInvertDriver.includes(driver));
     await epdWrite(driver === "02" ? 0x24 : 0x10, canvas2bytes(canvas, 'bw'));
     await epdWrite(driver === "02" ? 0x26 : 0x13, canvas2bytes(canvas, 'red', invert));
   } else {
@@ -202,8 +217,13 @@ function handleNotify(value, idx) {
     addLog(`收到配置：${bytes2hex(data)}`);
     const epdpins = document.getElementById("epdpins");
     const epddriver = document.getElementById("epddriver");
+    const epdinvert = document.getElementById("epdinvert");
     epdpins.value = bytes2hex(data.slice(0, 7));
     if (data.length > 10) epdpins.value += bytes2hex(data.slice(10, 11));
+    if (data.length > 11) {
+      const invertByte = data.slice(11, 12);
+      epdinvert.checked = (invertByte == 0xFF) ? false : !!(invertByte & 0x01);
+    }
     epddriver.value = bytes2hex(data.slice(7, 8));
     filterDitheringOptions();
   } else {
@@ -343,7 +363,7 @@ function checkDebugMode() {
   const link = document.getElementById('debug-toggle');
   const urlParams = new URLSearchParams(window.location.search);
   const debugMode = urlParams.get('debug');
-  
+
   if (debugMode === 'true') {
       document.body.classList.add('debug-mode');
       link.innerHTML = '正常模式';
