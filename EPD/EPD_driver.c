@@ -272,7 +272,7 @@ void EPD_LED_BLINK(void)
 
 float EPD_ReadVoltage(void)
 {
-    #if defined(S112)
+#if defined(S112)
     volatile int16_t value = 0;
     NRF_SAADC->RESOLUTION = SAADC_RESOLUTION_VAL_10bit;
     NRF_SAADC->ENABLE = (SAADC_ENABLE_ENABLE_Enabled << SAADC_ENABLE_ENABLE_Pos);
@@ -306,6 +306,7 @@ float EPD_ReadVoltage(void)
                       (ADC_CONFIG_EXTREFSEL_None << ADC_CONFIG_EXTREFSEL_Pos);
     NRF_ADC->TASKS_START = 1;
     while(!NRF_ADC->EVENTS_END);
+    NRF_ADC->EVENTS_END = 0;
     uint16_t value = NRF_ADC->RESULT;
     NRF_ADC->TASKS_STOP = 1;
     NRF_ADC->ENABLE = 0;
