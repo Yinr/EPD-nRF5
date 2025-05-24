@@ -39,6 +39,7 @@
 #include "nrf_drv_wdt.h"
 #include "nrf_pwr_mgmt.h"
 #include "EPD_service.h"
+#include "main.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -97,6 +98,8 @@ BLE_EPD_DEF(m_epd);                                                             
 static uint32_t                          m_timestamp = 1735689600;                      /**< Current timestamp. */
 APP_TIMER_DEF(m_clock_timer_id);                                                        /**< Clock timer. */
 static nrf_drv_wdt_channel_id            m_wdt_channel_id;
+static uint32_t                          m_wdt_last_feed_time = 0;
+static uint32_t                          m_resetreas;
 
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -112,6 +115,30 @@ static nrf_drv_wdt_channel_id            m_wdt_channel_id;
 void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
 {
     app_error_handler(DEAD_BEEF, line_num, p_file_name);
+}
+
+// return current timestamp
+uint32_t timestamp(void)
+{
+    return m_timestamp;
+}
+
+// set the timestamp
+void set_timestamp(uint32_t timestamp)
+{
+    app_timer_stop(m_clock_timer_id);
+    m_timestamp = timestamp;
+    app_timer_start(m_clock_timer_id, CLOCK_TIMER_INTERVAL, NULL);
+}
+
+// reload the wdt channel
+void app_feed_wdt(void)
+{
+    if (m_timestamp - m_wdt_last_feed_time >= 30) {
+        NRF_LOG_DEBUG("Feed WDT\n");
+        nrf_drv_wdt_channel_feed(m_wdt_channel_id);
+        m_wdt_last_feed_time = m_timestamp;
+    }
 }
 
 #if defined(S112)
@@ -254,6 +281,8 @@ static void application_timers_start(void)
 void sleep_mode_enter(void)
 {
     NRF_LOG_DEBUG("Entering deep sleep mode\n");
+    NRF_LOG_FINAL_FLUSH();
+    nrf_delay_ms(100);
 
     ble_epd_sleep_prepare(&m_epd);
     nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_GOTO_SYSOFF);
@@ -673,19 +702,6 @@ static void advertising_init(void)
 #endif
 }
 
-// return current timestamp
-uint32_t timestamp(void)
-{
-    return m_timestamp;
-}
-
-void set_timestamp(uint32_t timestamp)
-{
-    app_timer_stop(m_clock_timer_id);
-    m_timestamp = timestamp;
-    app_timer_start(m_clock_timer_id, CLOCK_TIMER_INTERVAL, NULL);
-}
-
 /**@brief Function for initializing the nrf log module.
  */
 static void log_init(void)
@@ -713,10 +729,7 @@ static void power_management_init(void)
  */
 static void idle_state_handle(void)
 {
-    if (m_timestamp % 30 == 0) {
-        NRF_LOG_DEBUG("Feed WDT\n");
-        nrf_drv_wdt_channel_feed(m_wdt_channel_id);
-    }
+    app_feed_wdt();
 
     if (NRF_LOG_PROCESS() == false)
         nrf_pwr_mgmt_run();
@@ -728,6 +741,8 @@ static void idle_state_handle(void)
 void wdt_event_handler(void)
 {
     //NOTE: The max amount of time we can spend in WDT interrupt is two cycles of 32768[Hz] clock - after that, reset occurs
+    NRF_LOG_ERROR("WDT Rest!\r\n");
+    NRF_LOG_FINAL_FLUSH();
 }
 
 /**@brief Function for application main entry.
@@ -736,8 +751,12 @@ int main(void)
 {
     log_init();
 
+    // Save reset reason.
+    m_resetreas = NRF_POWER->RESETREAS;
+    NRF_POWER->RESETREAS |= NRF_POWER->RESETREAS;
+
     NRF_LOG_DEBUG("init..\n");
-    
+
     // Configure WDT.
     nrf_drv_wdt_config_t config = NRF_DRV_WDT_DEAFULT_CONFIG;
     APP_ERROR_CHECK(nrf_drv_wdt_init(&config, wdt_event_handler));
@@ -767,6 +786,11 @@ int main(void)
     advertising_start();
 
     NRF_LOG_DEBUG("done.\n");
+
+    if (m_resetreas & NRF_POWER_RESETREAS_DOG_MASK) {
+        m_epd.display_mode = MODE_CALENDAR;
+        ble_epd_on_timer(&m_epd, 0, true);
+    }
 
     for (;;)
     {
