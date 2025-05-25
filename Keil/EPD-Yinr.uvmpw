@@ -13,13 +13,13 @@
   </project>
 
   <project>
-    <PathAndName>.\EPD-Yinr-02-nRF51822AB.uvprojx</PathAndName>
+    <PathAndName>.\EPD-Yinr-02-nRF52810.uvprojx</PathAndName>
+    <NodeIsActive>1</NodeIsActive>
     <NodeIsExpanded>1</NodeIsExpanded>
   </project>
 
   <project>
-    <PathAndName>.\EPD-Yinr-03-nRF52810.uvprojx</PathAndName>
-    <NodeIsActive>1</NodeIsActive>
+    <PathAndName>.\EPD-Yinr-03-nRF51822AB.uvprojx</PathAndName>
     <NodeIsExpanded>1</NodeIsExpanded>
   </project>
 
