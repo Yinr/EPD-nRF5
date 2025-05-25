@@ -14,16 +14,16 @@
       <uAC6>0</uAC6>
       <TargetOption>
         <TargetCommonOption>
-          <Device>nRF52811_xxAA</Device>
+          <Device>nRF52810_xxAA</Device>
           <Vendor>Nordic Semiconductor</Vendor>
           <PackID>NordicSemiconductor.nRF_DeviceFamilyPack.8.40.3</PackID>
           <PackURL>http://developer.nordicsemi.com/nRF5_SDK/pieces/nRF_DeviceFamilyPack/</PackURL>
           <Cpu>IRAM(0x20000000,0x00006000) IRAM2(0x00800000,0x00006000) IROM(0x00000000,0x00030000) CPUTYPE("Cortex-M4") DSP CLOCK(12000000) ELITTLE</Cpu>
           <FlashUtilSpec></FlashUtilSpec>
           <StartupFile></StartupFile>
-          <FlashDriverDll>UL2CM3(-S0 -C0 -P0 -FD20000000 -FC4000 -FN2 -FF0nrf52xxx -FS00 -FL0200000 -FF1nrf52xxx_uicr -FS110001000 -FL11000 -FP0($$Device:nRF52811_xxAA$Flash\nrf52xxx.flm) -FP1($$Device:nRF52811_xxAA$Flash\nrf52xxx_uicr.flm))</FlashDriverDll>
+          <FlashDriverDll>UL2CM3(-S0 -C0 -P0 -FD20000000 -FC4000 -FN2 -FF0nrf52xxx -FS00 -FL0200000 -FF1nrf52xxx_uicr -FS110001000 -FL11000 -FP0($$Device:nRF52810_xxAA$Flash\nrf52xxx.flm) -FP1($$Device:nRF52810_xxAA$Flash\nrf52xxx_uicr.flm))</FlashDriverDll>
           <DeviceId>0</DeviceId>
-          <RegisterFile>$$Device:nRF52811_xxAA$Device\Include\nrf.h</RegisterFile>
+          <RegisterFile>$$Device:nRF52810_xxAA$Device\Include\nrf.h</RegisterFile>
           <MemoryEnv></MemoryEnv>
           <Cmp></Cmp>
           <Asm></Asm>
@@ -33,7 +33,7 @@
           <SLE66CMisc></SLE66CMisc>
           <SLE66AMisc></SLE66AMisc>
           <SLE66LinkerMisc></SLE66LinkerMisc>
-          <SFDFile>$$Device:nRF52811_xxAA$SVD\nrf52811.svd</SFDFile>
+          <SFDFile>$$Device:nRF52810_xxAA$SVD\nrf52810.svd</SFDFile>
           <bCustSvd>0</bCustSvd>
           <UseEnv>0</UseEnv>
           <BinPath></BinPath>
@@ -48,14 +48,14 @@
             <NotGenerated>0</NotGenerated>
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
-          <OutputDirectory>.\Objects\</OutputDirectory>
+          <OutputDirectory>.\_build_nRF52810AA\</OutputDirectory>
           <OutputName>EPD-nRF52810AA</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
           <CreateHexFile>1</CreateHexFile>
           <DebugInformation>0</DebugInformation>
           <BrowseInformation>0</BrowseInformation>
-          <ListingPath>.\Listings\</ListingPath>
+          <ListingPath>.\_build_nRF52810AA\</ListingPath>
           <HexFormatSelection>1</HexFormatSelection>
           <Merge32K>0</Merge32K>
           <CreateBatchFile>0</CreateBatchFile>
@@ -80,9 +80,9 @@
             <nStopB2X>0</nStopB2X>
           </BeforeMake>
           <AfterMake>
-            <RunUserProg1>0</RunUserProg1>
+            <RunUserProg1>1</RunUserProg1>
             <RunUserProg2>0</RunUserProg2>
-            <UserProg1Name></UserProg1Name>
+            <UserProg1Name>..\tools\make-ota-nrf52.bat $L @L</UserProg1Name>
             <UserProg2Name></UserProg2Name>
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
@@ -300,8 +300,8 @@
               </OCR_RVCT8>
               <OCR_RVCT9>
                 <Type>0</Type>
-                <StartAddress>0x200022c8</StartAddress>
-                <Size>0x3d38</Size>
+                <StartAddress>0x200022d8</StartAddress>
+                <Size>0x3d28</Size>
               </OCR_RVCT9>
               <OCR_RVCT10>
                 <Type>0</Type>
@@ -337,9 +337,9 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls>--locale=english --reduce_paths</MiscControls>
-              <Define>APP_TIMER_V2 APP_TIMER_V2_RTC1_ENABLED CONFIG_GPIO_AS_PINRESET DEVELOP_IN_NRF52840 FLOAT_ABI_SOFT NRF52811_XXAA NRFX_COREDEP_DELAY_US_LOOP_CYCLES=3 NRF_SD_BLE_API_VERSION=7 S112 SOFTDEVICE_PRESENT __HEAP_SIZE=8192 __STACK_SIZE=2048</Define>
+              <Define>APP_TIMER_V2 APP_TIMER_V2_RTC1_ENABLED CONFIG_GPIO_AS_PINRESET DEVELOP_IN_NRF52840 FLOAT_ABI_SOFT NRF52811_XXAA NRFX_COREDEP_DELAY_US_LOOP_CYCLES=3 NRF_DFU_SVCI_ENABLED NRF_DFU_TRANSPORT_BLE=1 NRF_SD_BLE_API_VERSION=7 S112 SOFTDEVICE_PRESENT __HEAP_SIZE=8192 __STACK_SIZE=2048</Define>
               <Undefine></Undefine>
-              <IncludePath>..\config;..\EPD;..\GUI;..\SDK\17.1.0_ddde560;..\SDK\17.1.0_ddde560\components\ble\common;..\SDK\17.1.0_ddde560\components\ble\ble_advertising;..\SDK\17.1.0_ddde560\components\ble\nrf_ble_gatt;..\SDK\17.1.0_ddde560\components\libraries\atomic;..\SDK\17.1.0_ddde560\components\libraries\atomic_fifo;..\SDK\17.1.0_ddde560\components\libraries\atomic_flags;..\SDK\17.1.0_ddde560\components\libraries\balloc;..\SDK\17.1.0_ddde560\components\libraries\delay;..\SDK\17.1.0_ddde560\components\libraries\fstorage;..\SDK\17.1.0_ddde560\components\libraries\fds;..\SDK\17.1.0_ddde560\components\libraries\experimental_section_vars;..\SDK\17.1.0_ddde560\components\libraries\log;..\SDK\17.1.0_ddde560\components\libraries\log\src;..\SDK\17.1.0_ddde560\components\libraries\memobj;..\SDK\17.1.0_ddde560\components\libraries\mutex;..\SDK\17.1.0_ddde560\components\libraries\pwr_mgmt;..\SDK\17.1.0_ddde560\components\libraries\ringbuf;..\SDK\17.1.0_ddde560\components\libraries\sortlist;..\SDK\17.1.0_ddde560\components\libraries\scheduler;..\SDK\17.1.0_ddde560\components\libraries\strerror;..\SDK\17.1.0_ddde560\components\libraries\timer;..\SDK\17.1.0_ddde560\components\libraries\util;..\SDK\17.1.0_ddde560\components\softdevice\common;..\SDK\17.1.0_ddde560\components\softdevice\s112\headers;..\SDK\17.1.0_ddde560\components\softdevice\s112\headers\nrf52;..\SDK\17.1.0_ddde560\components\toolchain\cmsis\include;..\SDK\17.1.0_ddde560\external\fprintf;..\SDK\17.1.0_ddde560\external\segger_rtt;..\SDK\17.1.0_ddde560\integration\nrfx;..\SDK\17.1.0_ddde560\integration\nrfx\legacy;..\SDK\17.1.0_ddde560\modules\nrfx;..\SDK\17.1.0_ddde560\modules\nrfx\mdk;..\SDK\17.1.0_ddde560\modules\nrfx\drivers\include;..\SDK\17.1.0_ddde560\modules\nrfx\hal</IncludePath>
+              <IncludePath>..\;..\EPD;..\GUI;..\SDK\17.1.0_ddde560;..\SDK\17.1.0_ddde560\components\ble\common;..\SDK\17.1.0_ddde560\components\ble\ble_advertising;..\SDK\17.1.0_ddde560\components\ble\nrf_ble_gatt;..\SDK\17.1.0_ddde560\components\ble\ble_services\ble_dfu;..\SDK\17.1.0_ddde560\components\libraries\atomic;..\SDK\17.1.0_ddde560\components\libraries\atomic_fifo;..\SDK\17.1.0_ddde560\components\libraries\atomic_flags;..\SDK\17.1.0_ddde560\components\libraries\balloc;..\SDK\17.1.0_ddde560\components\libraries\bootloader;..\SDK\17.1.0_ddde560\components\libraries\bootloader\ble_dfu;..\SDK\17.1.0_ddde560\components\libraries\bootloader\dfu;..\SDK\17.1.0_ddde560\components\libraries\delay;..\SDK\17.1.0_ddde560\components\libraries\fstorage;..\SDK\17.1.0_ddde560\components\libraries\fds;..\SDK\17.1.0_ddde560\components\libraries\experimental_section_vars;..\SDK\17.1.0_ddde560\components\libraries\log;..\SDK\17.1.0_ddde560\components\libraries\log\src;..\SDK\17.1.0_ddde560\components\libraries\memobj;..\SDK\17.1.0_ddde560\components\libraries\mutex;..\SDK\17.1.0_ddde560\components\libraries\pwr_mgmt;..\SDK\17.1.0_ddde560\components\libraries\ringbuf;..\SDK\17.1.0_ddde560\components\libraries\sortlist;..\SDK\17.1.0_ddde560\components\libraries\scheduler;..\SDK\17.1.0_ddde560\components\libraries\strerror;..\SDK\17.1.0_ddde560\components\libraries\svc;..\SDK\17.1.0_ddde560\components\libraries\timer;..\SDK\17.1.0_ddde560\components\libraries\util;..\SDK\17.1.0_ddde560\components\softdevice\common;..\SDK\17.1.0_ddde560\components\softdevice\s112\headers;..\SDK\17.1.0_ddde560\components\softdevice\s112\headers\nrf52;..\SDK\17.1.0_ddde560\components\toolchain\cmsis\include;..\SDK\17.1.0_ddde560\external\fprintf;..\SDK\17.1.0_ddde560\external\segger_rtt;..\SDK\17.1.0_ddde560\integration\nrfx;..\SDK\17.1.0_ddde560\integration\nrfx\legacy;..\SDK\17.1.0_ddde560\modules\nrfx;..\SDK\17.1.0_ddde560\modules\nrfx\mdk;..\SDK\17.1.0_ddde560\modules\nrfx\drivers\include;..\SDK\17.1.0_ddde560\modules\nrfx\hal</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -355,7 +355,7 @@
             <ClangAsOpt>1</ClangAsOpt>
             <VariousControls>
               <MiscControls>--cpreproc_opts=-DAPP_TIMER_V2,-DAPP_TIMER_V2_RTC1_ENABLED,-DCONFIG_GPIO_AS_PINRESET,-DDEVELOP_IN_NRF52840,-DFLOAT_ABI_SOFT,-DNRF52811_XXAA,-DNRFX_COREDEP_DELAY_US_LOOP_CYCLES=3,-DNRF_SD_BLE_API_VERSION=7,-DS112,-DSOFTDEVICE_PRESENT,-D__HEAP_SIZE=8192,-D__STACK_SIZE=2048</MiscControls>
-              <Define>APP_TIMER_V2 APP_TIMER_V2_RTC1_ENABLED CONFIG_GPIO_AS_PINRESET DEVELOP_IN_NRF52840 FLOAT_ABI_SOFT NRF52811_XXAA NRFX_COREDEP_DELAY_US_LOOP_CYCLES=3 NRF_SD_BLE_API_VERSION=7 S112 SOFTDEVICE_PRESENT __HEAP_SIZE=8192 __STACK_SIZE=2048</Define>
+              <Define>APP_TIMER_V2 APP_TIMER_V2_RTC1_ENABLED CONFIG_GPIO_AS_PINRESET DEVELOP_IN_NRF52840 FLOAT_ABI_SOFT NRF52811_XXAA NRFX_COREDEP_DELAY_US_LOOP_CYCLES=3 NRF_DFU_SVCI_ENABLED NRF_DFU_TRANSPORT_BLE=1 NRF_SD_BLE_API_VERSION=7 S112 SOFTDEVICE_PRESENT __HEAP_SIZE=8192 __STACK_SIZE=2048</Define>
               <Undefine></Undefine>
               <IncludePath>..\config;..\EPD;..\GUI;..\SDK\17.1.0_ddde560;..\SDK\17.1.0_ddde560\components\ble\common;..\SDK\17.1.0_ddde560\components\ble\ble_advertising;..\SDK\17.1.0_ddde560\components\ble\nrf_ble_gatt;..\SDK\17.1.0_ddde560\components\libraries\atomic;..\SDK\17.1.0_ddde560\components\libraries\atomic_fifo;..\SDK\17.1.0_ddde560\components\libraries\atomic_flags;..\SDK\17.1.0_ddde560\components\libraries\balloc;..\SDK\17.1.0_ddde560\components\libraries\delay;..\SDK\17.1.0_ddde560\components\libraries\fstorage;..\SDK\17.1.0_ddde560\components\libraries\fds;..\SDK\17.1.0_ddde560\components\libraries\experimental_section_vars;..\SDK\17.1.0_ddde560\components\libraries\log;..\SDK\17.1.0_ddde560\components\libraries\log\src;..\SDK\17.1.0_ddde560\components\libraries\memobj;..\SDK\17.1.0_ddde560\components\libraries\mutex;..\SDK\17.1.0_ddde560\components\libraries\pwr_mgmt;..\SDK\17.1.0_ddde560\components\libraries\ringbuf;..\SDK\17.1.0_ddde560\components\libraries\sortlist;..\SDK\17.1.0_ddde560\components\libraries\scheduler;..\SDK\17.1.0_ddde560\components\libraries\strerror;..\SDK\17.1.0_ddde560\components\libraries\timer;..\SDK\17.1.0_ddde560\components\libraries\util;..\SDK\17.1.0_ddde560\components\softdevice\common;..\SDK\17.1.0_ddde560\components\softdevice\s112\headers;..\SDK\17.1.0_ddde560\components\softdevice\s112\headers\nrf52;..\SDK\17.1.0_ddde560\components\toolchain\cmsis\include;..\SDK\17.1.0_ddde560\external\fprintf;..\SDK\17.1.0_ddde560\external\segger_rtt;..\SDK\17.1.0_ddde560\integration\nrfx;..\SDK\17.1.0_ddde560\integration\nrfx\legacy;..\SDK\17.1.0_ddde560\modules\nrfx;..\SDK\17.1.0_ddde560\modules\nrfx\mdk;..\SDK\17.1.0_ddde560\modules\nrfx\drivers\include;..\SDK\17.1.0_ddde560\modules\nrfx\hal</IncludePath>
             </VariousControls>
@@ -370,7 +370,7 @@
             <TextAddressRange>0x00000000</TextAddressRange>
             <DataAddressRange>0x20000000</DataAddressRange>
             <pXoBase></pXoBase>
-            <ScatterFile></ScatterFile>
+            <ScatterFile>.\_build_nRF52810AA\EPD-nRF52810AA.sct</ScatterFile>
             <IncludeLibs></IncludeLibs>
             <IncludeLibsPath></IncludeLibsPath>
             <Misc>--diag_suppress 6330</Misc>
@@ -486,6 +486,21 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>nRF_DFU</GroupName>
+          <Files>
+            <File>
+              <FileName>ble_dfu.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\SDK\17.1.0_ddde560\components\ble\ble_services\ble_dfu\ble_dfu.c</FilePath>
+            </File>
+            <File>
+              <FileName>ble_dfu_unbonded.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\SDK\17.1.0_ddde560\components\ble\ble_services\ble_dfu\ble_dfu_unbonded.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>nRF_Drivers</GroupName>
           <Files>
             <File>
@@ -527,6 +542,11 @@
               <FileName>nrfx_spim.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\SDK\17.1.0_ddde560\modules\nrfx\drivers\src\nrfx_spim.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrfx_wdt.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\SDK\17.1.0_ddde560\modules\nrfx\drivers\src\nrfx_wdt.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -597,6 +617,11 @@
               <FileName>nrf_balloc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\SDK\17.1.0_ddde560\components\libraries\balloc\nrf_balloc.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrf_dfu_svci.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\SDK\17.1.0_ddde560\components\libraries\bootloader\dfu\nrf_dfu_svci.c</FilePath>
             </File>
             <File>
               <FileName>nrf_fprintf.c</FileName>
@@ -780,7 +805,7 @@
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
           <OutputDirectory>..\SDK\17.1.0_ddde560\components\softdevice\s112\hex\</OutputDirectory>
-          <OutputName>s112_nrf52_7.2.0_softdevice.hex</OutputName>
+          <OutputName>s112_nrf52_7.3.0_softdevice.hex</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
           <CreateHexFile>1</CreateHexFile>
@@ -890,11 +915,11 @@
             <ldmm>1</ldmm>
             <ldXref>1</ldXref>
             <BigEnd>0</BigEnd>
-            <AdsALst>0</AdsALst>
+            <AdsALst>1</AdsALst>
             <AdsACrf>1</AdsACrf>
             <AdsANop>0</AdsANop>
             <AdsANot>0</AdsANot>
-            <AdsLLst>0</AdsLLst>
+            <AdsLLst>1</AdsLLst>
             <AdsLmap>1</AdsLmap>
             <AdsLcgr>1</AdsLcgr>
             <AdsLsym>1</AdsLsym>
@@ -942,7 +967,7 @@
             <Ra2Chk>0</Ra2Chk>
             <Ra3Chk>0</Ra3Chk>
             <Im1Chk>1</Im1Chk>
-            <Im2Chk>1</Im2Chk>
+            <Im2Chk>0</Im2Chk>
             <OnChipMemories>
               <Ocm1>
                 <Type>0</Type>
@@ -1217,6 +1242,21 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>nRF_DFU</GroupName>
+          <Files>
+            <File>
+              <FileName>ble_dfu.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\SDK\17.1.0_ddde560\components\ble\ble_services\ble_dfu\ble_dfu.c</FilePath>
+            </File>
+            <File>
+              <FileName>ble_dfu_unbonded.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\SDK\17.1.0_ddde560\components\ble\ble_services\ble_dfu\ble_dfu_unbonded.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>nRF_Drivers</GroupName>
           <Files>
             <File>
@@ -1258,6 +1298,11 @@
               <FileName>nrfx_spim.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\SDK\17.1.0_ddde560\modules\nrfx\drivers\src\nrfx_spim.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrfx_wdt.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\SDK\17.1.0_ddde560\modules\nrfx\drivers\src\nrfx_wdt.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1328,6 +1373,11 @@
               <FileName>nrf_balloc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\SDK\17.1.0_ddde560\components\libraries\balloc\nrf_balloc.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrf_dfu_svci.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\SDK\17.1.0_ddde560\components\libraries\bootloader\dfu\nrf_dfu_svci.c</FilePath>
             </File>
             <File>
               <FileName>nrf_fprintf.c</FileName>
