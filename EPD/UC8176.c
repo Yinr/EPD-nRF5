@@ -90,10 +90,6 @@ void UC8176_Force_Temp(int8_t value)
     EPD_WriteByte(value);
 }
 
-/******************************************************************************
-function :  Turn On Display
-parameter:
-******************************************************************************/
 void UC8176_Refresh(void)
 {
     NRF_LOG_DEBUG("[EPD]: refresh begin\n");
@@ -106,10 +102,6 @@ void UC8176_Refresh(void)
     NRF_LOG_DEBUG("[EPD]: refresh end\n");
 }
 
-/******************************************************************************
-function :  Initialize the e-Paper register
-parameter:
-******************************************************************************/
 void UC8176_Init()
 {
     EPD_Reset(HIGH, 10);
@@ -149,15 +141,11 @@ static void UC8176_Write_RAM(uint8_t cmd, uint8_t value)
     }
 }
 
-/******************************************************************************
-function :  Clear screen
-parameter:
-******************************************************************************/
-void UC8176_Clear(void)
+void UC8176_Clear(bool refresh)
 {
     UC8176_Write_RAM(CMD_DTM1, 0xFF);
     UC8176_Write_RAM(CMD_DTM2, 0xFF);
-    UC8176_Refresh();
+    if (refresh) UC8176_Refresh();
 }
 
 static void _setPartialRamArea(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
@@ -209,10 +197,6 @@ void UC8176_Write_Image(uint8_t *black, uint8_t *color, uint16_t x, uint16_t y, 
     EPD_WriteCommand(CMD_PTOUT); // partial out
 }
 
-/******************************************************************************
-function :  Enter sleep mode
-parameter:
-******************************************************************************/
 void UC8176_Sleep(void)
 {
     UC8176_PowerOff();

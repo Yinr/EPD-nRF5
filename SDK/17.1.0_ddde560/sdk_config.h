@@ -5369,7 +5369,7 @@
 // <e> WDT_ENABLED - nrf_drv_wdt - WDT peripheral driver - legacy layer
 //==========================================================
 #ifndef WDT_ENABLED
-#define WDT_ENABLED 0
+#define WDT_ENABLED 1
 #endif
 // <o> WDT_CONFIG_BEHAVIOUR  - WDT behavior in CPU SLEEP or HALT mode
  
@@ -5379,14 +5379,14 @@
 // <0=> Pause in SLEEP and HALT 
 
 #ifndef WDT_CONFIG_BEHAVIOUR
-#define WDT_CONFIG_BEHAVIOUR 1
+#define WDT_CONFIG_BEHAVIOUR 0
 #endif
 
 // <o> WDT_CONFIG_RELOAD_VALUE - Reload value  <15-4294967295> 
 
 
 #ifndef WDT_CONFIG_RELOAD_VALUE
-#define WDT_CONFIG_RELOAD_VALUE 2000
+#define WDT_CONFIG_RELOAD_VALUE 60000
 #endif
 
 // <o> WDT_CONFIG_IRQ_PRIORITY  - Interrupt priority
@@ -10090,7 +10090,7 @@
 
 // <o> NRF_SDH_BLE_VS_UUID_COUNT - The number of vendor-specific UUIDs. 
 #ifndef NRF_SDH_BLE_VS_UUID_COUNT
-#define NRF_SDH_BLE_VS_UUID_COUNT 1
+#define NRF_SDH_BLE_VS_UUID_COUNT 2
 #endif
 
 // <q> NRF_SDH_BLE_SERVICE_CHANGED  - Include the Service Changed characteristic in the Attribute Table.

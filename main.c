@@ -20,11 +20,13 @@
 #include "ble_advdata.h"
 #include "ble_advertising.h"
 #include "ble_conn_params.h"
+#include "ble_dfu.h"
 #if defined(S112)
 #include "nrf_sdh.h"
 #include "nrf_sdh_soc.h"
 #include "nrf_sdh_ble.h"
 #include "nrf_ble_gatt.h"
+#include "nrf_bootloader_info.h"
 #else
 #include "fstorage.h"
 #include "softdevice_handler.h"
@@ -34,8 +36,10 @@
 #include "app_timer.h"
 #include "app_scheduler.h"
 #include "nrf_drv_gpiote.h"
+#include "nrf_drv_wdt.h"
 #include "nrf_pwr_mgmt.h"
 #include "EPD_service.h"
+#include "main.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -53,16 +57,16 @@
 #define APP_TIMER_OP_QUEUE_SIZE          4                                              /**< Size of timer operation queues. */
 
 #if defined(S112)
-    #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
-    #define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
-    #define TIMER_TICKS(MS) APP_TIMER_TICKS(MS)
+#define APP_BLE_CONN_CFG_TAG            1                                               /**< A tag identifying the SoftDevice BLE configuration. */
+#define APP_BLE_OBSERVER_PRIO           3                                               /**< Application's BLE observer priority. You shouldn't need to modify this value. */
+#define TIMER_TICKS(MS) APP_TIMER_TICKS(MS)
 #else
-    #define TIMER_TICKS(MS) APP_TIMER_TICKS(MS, APP_TIMER_PRESCALER)
-    // Low frequency clock source to be used by the SoftDevice
-    #define NRF_CLOCK_LFCLKSRC      {.source        = NRF_CLOCK_LF_SRC_SYNTH,           \
-                                     .rc_ctiv       = 0,                                \
-                                     .rc_temp_ctiv  = 0,                                \
-                                     .xtal_accuracy = NRF_CLOCK_LF_XTAL_ACCURACY_20_PPM}
+#define TIMER_TICKS(MS) APP_TIMER_TICKS(MS, APP_TIMER_PRESCALER)
+// Low frequency clock source to be used by the SoftDevice
+#define NRF_CLOCK_LFCLKSRC      {.source        = NRF_CLOCK_LF_SRC_SYNTH,           \
+                                 .rc_ctiv       = 0,                                \
+                                 .rc_temp_ctiv  = 0,                                \
+                                 .xtal_accuracy = NRF_CLOCK_LF_XTAL_ACCURACY_20_PPM}
 #endif
 
 #define MIN_CONN_INTERVAL                MSEC_TO_UNITS(7.5, UNIT_1_25_MS)               /**< Minimum connection interval (7.5 ms) */
@@ -83,6 +87,8 @@
 #if defined(S112)
 NRF_BLE_GATT_DEF(m_gatt);                                                               /**< GATT module instance. */
 BLE_ADVERTISING_DEF(m_advertising);                                                     /**< Advertising module instance. */
+#else
+static ble_dfu_t                         m_dfus;                                        /**< Structure used to identify the DFU service. */
 #endif
 static uint16_t                          m_conn_handle = BLE_CONN_HANDLE_INVALID;       /**< Handle of the current connection. */
 static ble_uuid_t                        m_adv_uuids[] = {{BLE_UUID_EPD_SVC, \
@@ -91,6 +97,9 @@ static ble_uuid_t                        m_adv_uuids[] = {{BLE_UUID_EPD_SVC, \
 BLE_EPD_DEF(m_epd);                                                                     /**< Structure to identify the EPD Service. */
 static uint32_t                          m_timestamp = 1735689600;                      /**< Current timestamp. */
 APP_TIMER_DEF(m_clock_timer_id);                                                        /**< Clock timer. */
+static nrf_drv_wdt_channel_id            m_wdt_channel_id;
+static uint32_t                          m_wdt_last_feed_time = 0;
+static uint32_t                          m_resetreas;
 
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -107,6 +116,121 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
 {
     app_error_handler(DEAD_BEEF, line_num, p_file_name);
 }
+
+// return current timestamp
+uint32_t timestamp(void)
+{
+    return m_timestamp;
+}
+
+// set the timestamp
+void set_timestamp(uint32_t timestamp)
+{
+    app_timer_stop(m_clock_timer_id);
+    m_timestamp = timestamp;
+    app_timer_start(m_clock_timer_id, CLOCK_TIMER_INTERVAL, NULL);
+}
+
+// reload the wdt channel
+void app_feed_wdt(void)
+{
+    if (m_timestamp - m_wdt_last_feed_time >= 30) {
+        NRF_LOG_DEBUG("Feed WDT\n");
+        nrf_drv_wdt_channel_feed(m_wdt_channel_id);
+        m_wdt_last_feed_time = m_timestamp;
+    }
+}
+
+#if defined(S112)
+static void buttonless_dfu_sdh_state_observer(nrf_sdh_state_evt_t state, void * p_context)
+{
+    if (state == NRF_SDH_EVT_STATE_DISABLED)
+    {
+        // Softdevice was disabled before going into reset. Inform bootloader to skip CRC on next boot.
+        nrf_power_gpregret2_set(BOOTLOADER_DFU_SKIP_CRC);
+
+        //Go to system off.
+        nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_GOTO_SYSOFF);
+    }
+}
+
+/* nrf_sdh state observer. */
+NRF_SDH_STATE_OBSERVER(m_buttonless_dfu_state_obs, 0) =
+{
+    .handler = buttonless_dfu_sdh_state_observer,
+};
+
+static void advertising_config_get(ble_adv_modes_config_t * p_config)
+{
+    memset(p_config, 0, sizeof(ble_adv_modes_config_t));
+
+    p_config->ble_adv_fast_enabled  = true;
+    p_config->ble_adv_fast_interval = APP_ADV_INTERVAL;
+    p_config->ble_adv_fast_timeout  = APP_ADV_TIMEOUT_IN_SECONDS * 100;
+}
+
+static void ble_dfu_evt_handler(ble_dfu_buttonless_evt_type_t event)
+{
+    switch (event)
+    {
+        case BLE_DFU_EVT_BOOTLOADER_ENTER_PREPARE:
+        {
+            NRF_LOG_INFO("Device is preparing to enter bootloader mode.");
+
+            // Prevent device from advertising on disconnect.
+            ble_adv_modes_config_t config;
+            advertising_config_get(&config);
+            config.ble_adv_on_disconnect_disabled = true;
+            ble_advertising_modes_config_set(&m_advertising, &config);
+
+            // Disconnect all other bonded devices that currently are connected.
+            // This is required to receive a service changed indication
+            // on bootup after a successful (or aborted) Device Firmware Update.
+            APP_ERROR_CHECK(sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION));
+            break;
+        }
+
+        case BLE_DFU_EVT_BOOTLOADER_ENTER:
+            NRF_LOG_INFO("Device will enter bootloader mode.");
+            break;
+
+        case BLE_DFU_EVT_BOOTLOADER_ENTER_FAILED:
+            NRF_LOG_ERROR("Request to enter bootloader mode failed asynchroneously.");
+            APP_ERROR_CHECK(false);
+            break;
+
+        case BLE_DFU_EVT_RESPONSE_SEND_ERROR:
+            NRF_LOG_ERROR("Request to send a response to client failed.");
+            APP_ERROR_CHECK(false);
+            break;
+
+        default:
+            NRF_LOG_ERROR("Unknown event from ble_dfu_buttonless.");
+            break;
+    }
+}
+#else
+static void ble_dfu_evt_handler(ble_dfu_t * p_dfu, ble_dfu_evt_t * p_evt)
+{
+    switch (p_evt->type)
+    {
+        case BLE_DFU_EVT_INDICATION_DISABLED:
+            NRF_LOG_INFO("Indication for BLE_DFU is disabled\r\n");
+            break;
+
+        case BLE_DFU_EVT_INDICATION_ENABLED:
+            NRF_LOG_INFO("Indication for BLE_DFU is enabled\r\n");
+            break;
+
+        case BLE_DFU_EVT_ENTERING_BOOTLOADER:
+            NRF_LOG_INFO("Device is entering bootloader mode!\r\n");
+            break;
+        default:
+            NRF_LOG_INFO("Unknown event from ble_dfu\r\n");
+            break;
+    }
+}
+#endif
 
 static void clock_timer_timeout_handler(void * p_context)
 {
@@ -157,6 +281,8 @@ static void application_timers_start(void)
 void sleep_mode_enter(void)
 {
     NRF_LOG_DEBUG("Entering deep sleep mode\n");
+    NRF_LOG_FINAL_FLUSH();
+    nrf_delay_ms(100);
 
     ble_epd_sleep_prepare(&m_epd);
     nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_GOTO_SYSOFF);
@@ -166,8 +292,23 @@ void sleep_mode_enter(void)
  */
 static void services_init(void)
 {
+    // Initialize EPD Service.
     memset(&m_epd, 0, sizeof(ble_epd_t));
     APP_ERROR_CHECK(ble_epd_init(&m_epd));
+
+#if defined(S112)
+    ble_dfu_buttonless_init_t dfus_init = {0};
+    dfus_init.evt_handler = ble_dfu_evt_handler;
+    APP_ERROR_CHECK(ble_dfu_buttonless_init(&dfus_init));
+#else
+    // Initialize the Device Firmware Update Service.
+    ble_dfu_init_t dfus_init;
+    memset(&dfus_init, 0, sizeof(dfus_init));
+    dfus_init.evt_handler                               = ble_dfu_evt_handler;
+    dfus_init.ctrl_point_security_req_write_perm        = SEC_SIGNED;
+    dfus_init.ctrl_point_security_req_cccd_write_perm   = SEC_SIGNED;
+    APP_ERROR_CHECK(ble_dfu_init(&m_dfus, &dfus_init));
+#endif
 }
 
 /**@brief Function for the GAP initialization.
@@ -407,6 +548,7 @@ static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
     ble_epd_on_ble_evt(&m_epd, p_ble_evt);
     on_ble_evt(p_ble_evt);
     ble_advertising_on_ble_evt(p_ble_evt);
+    ble_dfu_on_ble_evt(&m_dfus, p_ble_evt);
 }
 
 
@@ -459,6 +601,7 @@ static void ble_stack_init(void)
     APP_ERROR_CHECK(softdevice_enable_get_default_config(CENTRAL_LINK_COUNT,
                                                          PERIPHERAL_LINK_COUNT,
                                                          &ble_enable_params));
+    ble_enable_params.common_enable_params.vs_uuid_count = 2;
 
     // Check the ram settings against the used number of links
     CHECK_RAM_START_ADDR(CENTRAL_LINK_COUNT,PERIPHERAL_LINK_COUNT);
@@ -559,19 +702,6 @@ static void advertising_init(void)
 #endif
 }
 
-// return current timestamp
-uint32_t timestamp(void)
-{
-    return m_timestamp;
-}
-
-void set_timestamp(uint32_t timestamp)
-{
-    app_timer_stop(m_clock_timer_id);
-    m_timestamp = timestamp;
-    app_timer_start(m_clock_timer_id, CLOCK_TIMER_INTERVAL, NULL);
-}
-
 /**@brief Function for initializing the nrf log module.
  */
 static void log_init(void)
@@ -599,8 +729,20 @@ static void power_management_init(void)
  */
 static void idle_state_handle(void)
 {
+    app_feed_wdt();
+
     if (NRF_LOG_PROCESS() == false)
         nrf_pwr_mgmt_run();
+}
+
+/**
+ * @brief WDT events handler.
+ */
+void wdt_event_handler(void)
+{
+    //NOTE: The max amount of time we can spend in WDT interrupt is two cycles of 32768[Hz] clock - after that, reset occurs
+    NRF_LOG_ERROR("WDT Rest!\r\n");
+    NRF_LOG_FINAL_FLUSH();
 }
 
 /**@brief Function for application main entry.
@@ -609,7 +751,17 @@ int main(void)
 {
     log_init();
 
+    // Save reset reason.
+    m_resetreas = NRF_POWER->RESETREAS;
+    NRF_POWER->RESETREAS |= NRF_POWER->RESETREAS;
+
     NRF_LOG_DEBUG("init..\n");
+
+    // Configure WDT.
+    nrf_drv_wdt_config_t config = NRF_DRV_WDT_DEAFULT_CONFIG;
+    APP_ERROR_CHECK(nrf_drv_wdt_init(&config, wdt_event_handler));
+    APP_ERROR_CHECK(nrf_drv_wdt_channel_alloc(&m_wdt_channel_id));
+    nrf_drv_wdt_enable();
 
     timers_init();
     power_management_init();
@@ -618,6 +770,7 @@ int main(void)
     gap_params_init();
 #if defined(S112)
     gatt_init();
+    ble_dfu_buttonless_async_svci_init();
 #else
     ble_options_set();
 #endif
@@ -633,6 +786,11 @@ int main(void)
     advertising_start();
 
     NRF_LOG_DEBUG("done.\n");
+
+    if (m_resetreas & NRF_POWER_RESETREAS_DOG_MASK) {
+        m_epd.display_mode = MODE_CALENDAR;
+        ble_epd_on_timer(&m_epd, 0, true);
+    }
 
     for (;;)
     {

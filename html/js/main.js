@@ -122,12 +122,15 @@ async function syncTime(mode) {
   ]);
   if(await write(EpdCmd.SET_TIME, data)) {
     addLog("时间已同步！");
+    addLog("屏幕刷新完成前请不要操作。");
   }
 }
 
 async function clearScreen() {
   if(confirm('确认清除屏幕内容?')) {
     await write(EpdCmd.CLEAR);
+    addLog("清屏指令已发送！");
+    addLog("屏幕刷新完成前请不要操作。");
   }
 }
 
@@ -142,11 +145,6 @@ async function sendimg() {
   const status = document.getElementById("status");
   const driver = document.getElementById("epddriver").value;
   const mode = document.getElementById('dithering').value;
-
-  if (mode === '') {
-    alert('请选择一种取模算法！');
-    return;
-  }
 
   startTime = new Date().getTime();
   status.parentElement.style.display = "block";
@@ -168,6 +166,7 @@ async function sendimg() {
   const sendTime = (new Date().getTime() - startTime) / 1000.0;
   addLog(`发送完成！耗时: ${sendTime}s`);
   setStatus(`发送完成！耗时: ${sendTime}s`);
+  addLog("屏幕刷新完成前请不要操作。");
   setTimeout(() => {
     status.parentElement.style.display = "none";
   }, 5000);
@@ -343,16 +342,15 @@ function intToHex(intIn) {
   return stringOut.substring(2, 4) + stringOut.substring(0, 2);
 }
 
-async function update_image() {
-  let image = new Image();;
+async function update_image(clear = false) {
   const image_file = document.getElementById('image_file');
-  if (image_file.files.length > 0) {
-    const file = image_file.files[0];
-    image.src = URL.createObjectURL(file);
-  } else {
-    image.src = document.getElementById('demo-img').src;
-  }
+  if (image_file.files.length == 0) return;
 
+  if (clear) clear_canvas();
+
+  const file = image_file.files[0];
+  let image = new Image();;
+  image.src = URL.createObjectURL(file);
   image.onload = function(event) {
     URL.revokeObjectURL(this.src);
     ctx.drawImage(image, 0, 0, image.width, image.height, 0, 0, canvas.width, canvas.height);
@@ -361,10 +359,12 @@ async function update_image() {
 }
 
 function clear_canvas() {
-  if(confirm('确认清除画布内容?')) {
+  if (confirm('清除画布已有内容?')) {
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    return true;
   }
+  return false;
 }
 
 function convert_dithering() {
@@ -382,6 +382,7 @@ function filterDitheringOptions() {
   const driver = document.getElementById('epddriver').value;
   const dithering = document.getElementById('dithering');
   let currentOptionStillValid = false;
+  let lastValidOptionValue = null;
 
   for (let optgroup of dithering.getElementsByTagName('optgroup')) {
     const drivers = optgroup.getAttribute('data-driver').split('|');
@@ -390,12 +391,13 @@ function filterDitheringOptions() {
       if (show) {
         option.removeAttribute('disabled');
         if (option.value == dithering.value) currentOptionStillValid = true;
+        lastValidOptionValue = option.value;
       } else {
         option.setAttribute('disabled', 'disabled');
       }
     }
   }
-  if (!currentOptionStillValid) dithering.value = '';
+  if (!currentOptionStillValid) dithering.value = lastValidOptionValue;
 }
 
 function checkDebugMode() {
@@ -420,9 +422,9 @@ document.body.onload = () => {
   canvas = document.getElementById('canvas');
   ctx = canvas.getContext("2d");
 
-  updateButtonStatus();
-  update_image();
-  filterDitheringOptions();
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  updateButtonStatus();
   checkDebugMode();
 }
