@@ -4,11 +4,11 @@
 #include "Adafruit_GFX.h"
 
 #ifndef PAGE_HEIGHT
-#define PAGE_HEIGHT ((__HEAP_SIZE / 50) - 4)
+#define PAGE_HEIGHT ((__HEAP_SIZE / 50) - 8)
 #endif
 
 typedef enum {
-    MODE_NONE = 0,
+    MODE_PICTURE = 0,
     MODE_CALENDAR = 1,
     MODE_CLOCK = 2,
 } display_mode_t;
