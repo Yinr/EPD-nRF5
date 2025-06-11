@@ -33,12 +33,11 @@ typedef struct
     void (*init)();                                   /**< Initialize the e-Paper register */
     void (*clear)(bool refresh);                      /**< Clear screen */
     void (*write_image)(uint8_t *black, uint8_t *color, uint16_t x, uint16_t y, uint16_t w, uint16_t h); /**< write image */
+    void (*write_ram)(bool begin, bool black, uint8_t *data, uint8_t len); /* write data to epd ram */
     void (*refresh)(void);                            /**< Sends the image buffer in RAM to e-Paper and displays */
     void (*sleep)(void);                              /**< Enter sleep mode */
     int8_t (*read_temp)(void);                        /**< Read temperature from driver chip */
     void (*force_temp)(int8_t value);                 /**< Force temperature (will trigger OTP LUT switch) */
-    uint8_t cmd_write_ram1;                           /**< Command to write black ram */
-    uint8_t cmd_write_ram2;                           /**< Command to write red ram */
 } epd_driver_t;
 
 typedef enum
@@ -47,15 +46,23 @@ typedef enum
     EPD_UC8176_420_BWR = 3,
     EPD_SSD1619_420_BWR = 2,
     EPD_SSD1619_420_BW = 4,
+    EPD_JD79668_420_BWRY = 5,
 } epd_model_id_t;
+
+typedef enum
+{
+    BW = 1,
+    BWR = 2,
+    BWRY = 3,
+} epd_color_t;
 
 typedef struct
 {
     epd_model_id_t id;
+    epd_color_t color;
     epd_driver_t *drv;
     uint16_t width;
     uint16_t height;
-    bool bwr;
 } epd_model_t;
 
 #define LOW             (0x0)
@@ -94,7 +101,7 @@ uint8_t EPD_ReadByte(void);
         EPD_WriteCmd(cmd); \
         EPD_WriteData(_data, sizeof(_data)); \
     } while (0)
-void EPD_FillRAM(uint8_t cmd, uint8_t value);
+void EPD_FillRAM(uint8_t cmd, uint8_t value, uint32_t len);
 void EPD_Reset(uint32_t value, uint16_t duration);
 void EPD_WaitBusy(uint32_t value, uint16_t timeout);
 

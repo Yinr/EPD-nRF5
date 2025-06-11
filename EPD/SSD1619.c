@@ -94,6 +94,22 @@ static void _setPartialRamArea(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
     EPD_Write(CMD_RAM_YCOUNT, y % 256, y / 256);
 }
 
+void SSD1619_Dump_LUT(void)
+{
+    uint8_t lut[128];
+
+    // Load LUT
+    SSD1619_Update(0xB1);
+    SSD1619_WaitBusy(200);
+
+    EPD_WriteCmd(CMD_READ_LUT);
+    EPD_ReadData(lut, sizeof(lut));
+
+    NRF_LOG_DEBUG("=== LUT BEGIN ===\n");
+    NRF_LOG_HEXDUMP_DEBUG(lut, sizeof(lut));
+    NRF_LOG_DEBUG("=== LUT END ===\n");
+}
+
 void SSD1619_Init()
 {
     epd_model_t *EPD = epd_get();
@@ -106,6 +122,8 @@ void SSD1619_Init()
     EPD_Write(CMD_BORDER_CTRL, 0x01);
     EPD_Write(CMD_TSENSOR_CTRL, 0x80);
 
+//    SSD1619_Dump_LUT();
+
     _setPartialRamArea(0, 0, EPD->width, EPD->height);
 }
 
@@ -113,7 +131,7 @@ static void SSD1619_Refresh(void)
 {
     epd_model_t *EPD = epd_get();
 
-    EPD_Write(CMD_DISP_CTRL1, EPD->bwr ? 0x80 : 0x40, 0x00);
+    EPD_Write(CMD_DISP_CTRL1, EPD->color == BWR ? 0x80 : 0x40, 0x00);
 
     NRF_LOG_DEBUG("[EPD]: refresh begin\n");
     NRF_LOG_DEBUG("[EPD]: temperature: %d\n", SSD1619_Read_Temp());
@@ -128,11 +146,12 @@ static void SSD1619_Refresh(void)
 void SSD1619_Clear(bool refresh)
 {
     epd_model_t *EPD = epd_get();
+    uint32_t ram_bytes = ((EPD->width + 7) / 8) * EPD->height;
 
     _setPartialRamArea(0, 0, EPD->width, EPD->height);
 
-    EPD_FillRAM(CMD_WRITE_RAM1, 0xFF);
-    EPD_FillRAM(CMD_WRITE_RAM2, 0xFF);
+    EPD_FillRAM(CMD_WRITE_RAM1, 0xFF, ram_bytes);
+    EPD_FillRAM(CMD_WRITE_RAM2, 0xFF, ram_bytes);
 
     if (refresh)
         SSD1619_Refresh();
@@ -159,12 +178,24 @@ void SSD1619_Write_Image(uint8_t *black, uint8_t *color, uint16_t x, uint16_t y,
     {
         for (uint16_t j = 0; j < w / 8; j++)
         {
-            if (EPD->bwr)
+            if (EPD->color == BWR)
                 EPD_WriteByte(color ? color[j + i * wb] : 0xFF);
             else
                 EPD_WriteByte(black[j + i * wb]);
         }
     }
+}
+
+void SSD1619_Wite_Ram(bool begin, bool black, uint8_t *data, uint8_t len)
+{
+    if (begin) {
+        epd_model_t *EPD = epd_get();
+        if (EPD->color == BWR)
+            EPD_WriteCmd(black ? CMD_WRITE_RAM1 : CMD_WRITE_RAM2);
+        else
+            EPD_WriteCmd(CMD_WRITE_RAM1);
+    }
+    EPD_WriteData(data, len);
 }
 
 void SSD1619_Sleep(void)
@@ -177,28 +208,27 @@ static epd_driver_t epd_drv_ssd1619 = {
     .init = SSD1619_Init,
     .clear = SSD1619_Clear,
     .write_image = SSD1619_Write_Image,
+    .write_ram = SSD1619_Wite_Ram,
     .refresh = SSD1619_Refresh,
     .sleep = SSD1619_Sleep,
     .read_temp = SSD1619_Read_Temp,
     .force_temp = SSD1619_Force_Temp,
-    .cmd_write_ram1 = CMD_WRITE_RAM1,
-    .cmd_write_ram2 = CMD_WRITE_RAM2,
 };
 
 // SSD1619 400x300 Black/White/Red
 const epd_model_t epd_ssd1619_420_bwr = {
     .id = EPD_SSD1619_420_BWR,
+    .color = BWR,
     .drv = &epd_drv_ssd1619,
     .width = 400,
     .height = 300,
-    .bwr = true,
 };
 
 // SSD1619 400x300 Black/White
 const epd_model_t epd_ssd1619_420_bw = {
     .id = EPD_SSD1619_420_BW,
+    .color = BW,
     .drv = &epd_drv_ssd1619,
     .width = 400,
     .height = 300,
-    .bwr = false,
 };

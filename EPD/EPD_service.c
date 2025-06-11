@@ -40,7 +40,7 @@ static void epd_gui_update(void * p_event_data, uint16_t event_size)
     EPD_GPIO_Init();
     epd_model_t *epd = epd_init((epd_model_id_t)p_epd->config.model_id);
     gui_data_t data = {
-        .bwr             = epd->bwr,
+        .color           = epd->color,
         .width           = epd->width,
         .height          = epd->height,
         .timestamp       = event->timestamp,
@@ -74,6 +74,8 @@ static void on_disconnect(ble_epd_t * p_epd, ble_evt_t * p_ble_evt)
 {
     UNUSED_PARAMETER(p_ble_evt);
     p_epd->conn_handle = BLE_CONN_HANDLE_INVALID;
+    p_epd->epd->drv->sleep();
+    nrf_delay_ms(200); // for sleep
     EPD_GPIO_Uninit();
 }
 
@@ -159,11 +161,7 @@ static void epd_service_on_write(ble_epd_t * p_epd, uint8_t * p_data, uint16_t l
 
       case EPD_CMD_WRITE_IMAGE: // MSB=0000: ram begin, LSB=1111: black
           if (length < 3) return;
-          if ((p_data[1] >> 4) == 0x00) {
-              bool black = (p_data[1] & 0x0F) == 0x0F;
-              EPD_WriteCmd(black ? p_epd->epd->drv->cmd_write_ram1 : p_epd->epd->drv->cmd_write_ram2);
-          }
-          EPD_WriteData(&p_data[2], length - 2);
+          p_epd->epd->drv->write_ram((p_data[1] >> 4) == 0x00, (p_data[1] & 0x0F) == 0x0F, &p_data[2], length - 2);
           break;
 
       case EPD_CMD_SET_CONFIG:

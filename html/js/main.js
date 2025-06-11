@@ -22,6 +22,27 @@ const EpdCmd = {
   CFG_ERASE:  0x99,
 };
 
+const canvasSizes = [
+  { name: '1.54_152_152', width: 152, height: 152 },
+  { name: '1.54_200_200', width: 200, height: 200 },
+  { name: '2.13_212_104', width: 212, height: 104 },
+  { name: '2.13_250_122', width: 250, height: 122 },
+  { name: '2.66_296_152', width: 296, height: 152 },
+  { name: '2.9_296_128', width: 296, height: 128 },
+  { name: '2.9_384_168', width: 384, height: 168 },
+  { name: '3.5_384_184', width: 384, height: 184 },
+  { name: '3.7_416_240', width: 416, height: 240 },
+  { name: '3.97_800_480', width: 800, height: 480 },
+  { name: '4.2_400_300', width: 400, height: 300 },
+  { name: '5.79_792_272', width: 792, height: 272 },
+  { name: '7.5_800_480', width: 800, height: 480 },
+  { name: '10.2_960_640', width: 960, height: 640 },
+  { name: '10.85_1360_480', width: 1360, height: 480 },
+  { name: '11.6_960_640', width: 960, height: 640 },
+  { name: '4E_600_400', width: 600, height: 400 },
+  { name: '7.3E6', width: 480, height: 800 }
+];
+
 function hex2bytes(hex) {
   for (var bytes = [], c = 0; c < hex.length; c += 2)
     bytes.push(parseInt(hex.substr(c, 2), 16));
@@ -48,7 +69,7 @@ function resetVariables() {
   document.getElementById("log").value = '';
 }
 
-async function write(cmd, data, withResponse=true) {
+async function write(cmd, data, withResponse = true) {
   if (!epdCharacteristic) {
     addLog("服务不可用，请检查蓝牙连接");
     return false;
@@ -73,32 +94,7 @@ async function write(cmd, data, withResponse=true) {
   return true;
 }
 
-async function epdWrite(cmd, data) {
-  const chunkSize = document.getElementById('mtusize').value - 1;
-  const interleavedCount = document.getElementById('interleavedcount').value;
-  const count = Math.round(data.length / chunkSize);
-  let chunkIdx = 0;
-  let noReplyCount = interleavedCount;
-
-  if (typeof data == 'string') data = hex2bytes(data);
-
-  await write(EpdCmd.SEND_CMD, [cmd]);
-  for (let i = 0; i < data.length; i += chunkSize) {
-    let currentTime = (new Date().getTime() - startTime) / 1000.0;
-    setStatus(`命令：0x${cmd.toString(16)}, 数据块: ${chunkIdx+1}/${count+1}, 总用时: ${currentTime}s`);
-    if (noReplyCount > 0) {
-      await write(EpdCmd.SEND_DATA, data.slice(i, i + chunkSize), false);
-      noReplyCount--;
-    } else {
-      await write(EpdCmd.SEND_DATA, data.slice(i, i + chunkSize), true);
-      noReplyCount = interleavedCount;
-    }
-    chunkIdx++;
-  }
-}
-
-async function epdWriteImage(step = 'bw') {
-  const data = canvas2bytes(canvas, step);
+async function writeImage(data, step = 'bw') {
   const chunkSize = document.getElementById('mtusize').value - 2;
   const interleavedCount = document.getElementById('interleavedcount').value;
   const count = Math.round(data.length / chunkSize);
@@ -107,9 +103,9 @@ async function epdWriteImage(step = 'bw') {
 
   for (let i = 0; i < data.length; i += chunkSize) {
     let currentTime = (new Date().getTime() - startTime) / 1000.0;
-    setStatus(`${step == 'bw' ? '黑白' : '红色'}块: ${chunkIdx+1}/${count+1}, 总用时: ${currentTime}s`);
+    setStatus(`${step == 'bw' ? '黑白' : '颜色'}块: ${chunkIdx + 1}/${count + 1}, 总用时: ${currentTime}s`);
     const payload = [
-      (step == 'bw' ? 0x0F : 0x00) | ( i == 0 ? 0x00 : 0xF0),
+      (step == 'bw' ? 0x0F : 0x00) | (i == 0 ? 0x00 : 0xF0),
       ...data.slice(i, i + chunkSize),
     ];
     if (noReplyCount > 0) {
@@ -138,14 +134,14 @@ async function syncTime(mode) {
     -(new Date().getTimezoneOffset() / 60),
     mode
   ]);
-  if(await write(EpdCmd.SET_TIME, data)) {
+  if (await write(EpdCmd.SET_TIME, data)) {
     addLog("时间已同步！");
     addLog("屏幕刷新完成前请不要操作。");
   }
 }
 
 async function clearScreen() {
-  if(confirm('确认清除屏幕内容?')) {
+  if (confirm('确认清除屏幕内容?')) {
     await write(EpdCmd.CLEAR);
     addLog("清屏指令已发送！");
     addLog("屏幕刷新完成前请不要操作。");
@@ -160,24 +156,41 @@ async function sendcmd() {
 }
 
 async function sendimg() {
-  const status = document.getElementById("status");
-  const driver = document.getElementById("epddriver").value;
-  const mode = document.getElementById('dithering').value;
+  const canvasSize = document.getElementById('canvasSize').value;
+  const ditherMode = document.getElementById('ditherMode').value;
+  const epdDriverSelect = document.getElementById('epddriver');
+  const selectedOption = epdDriverSelect.options[epdDriverSelect.selectedIndex];
+
+  if (selectedOption.getAttribute('data-size') !== canvasSize) {
+    addLog(`画布尺寸和驱动不匹配，请重新选择。`);
+    return;
+  }
+  if (selectedOption.getAttribute('data-color') !== ditherMode) {
+    addLog(`颜色模式和驱动不匹配，请重新选择。`);
+    return;
+  }
 
   startTime = new Date().getTime();
+  const status = document.getElementById("status");
   status.parentElement.style.display = "block";
 
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const processedData = processImageData(imageData);
+
   updateButtonStatus(true);
-  if (appVersion < 0x16) {
-    if (mode.startsWith('bwr')) {
-      await epdWrite(driver === "02" ? 0x24 : 0x10, canvas2bytes(canvas, 'bw'));
-      await epdWrite(driver === "02" ? 0x26 : 0x13, canvas2bytes(canvas, 'red', driver === '02'));
-    } else {
-      await epdWrite(driver === "04" ? 0x24 : 0x13, canvas2bytes(canvas, 'bw'));
-    }
+
+  if (ditherMode === 'fourColor') {
+    await writeImage(processedData, 'color');
+  } else if (ditherMode === 'threeColor') {
+    const halfLength = Math.floor(processedData.length / 2);
+    await writeImage(processedData.slice(0, halfLength), 'bw');
+    await writeImage(processedData.slice(halfLength), 'red');
+  } else if (ditherMode === 'blackWhiteColor') {
+    await writeImage(processedData, 'bw');
   } else {
-    await epdWriteImage('bw');
-    if (mode.startsWith('bwr')) await epdWriteImage('red');
+    addLog("当前固件不支持此颜色模式。");
+    updateButtonStatus();
+    return;
   }
 
   await write(EpdCmd.REFRESH);
@@ -190,6 +203,46 @@ async function sendimg() {
   setTimeout(() => {
     status.parentElement.style.display = "none";
   }, 5000);
+}
+
+function downloadDataArray() {
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const processedData = processImageData(imageData);
+  const mode = document.getElementById('ditherMode').value;
+
+  if (mode === 'sixColor' && processedData.length !== canvas.width * canvas.height) {
+    console.log(`错误：预期${canvas.width * canvas.height}字节，但得到${processedData.length}字节`);
+    addLog('数组大小不匹配。请检查图像尺寸和模式。');
+    return;
+  }
+
+  const dataLines = [];
+  for (let i = 0; i < processedData.length; i++) {
+    const hexValue = (processedData[i] & 0xff).toString(16).padStart(2, '0');
+    dataLines.push(`0x${hexValue}`);
+  }
+
+  const formattedData = [];
+  for (let i = 0; i < dataLines.length; i += 16) {
+    formattedData.push(dataLines.slice(i, i + 16).join(', '));
+  }
+
+  const colorModeValue = mode === 'sixColor' ? 0 : mode === 'fourColor' ? 1 : mode === 'blackWhiteColor' ? 2 : 3;
+  const arrayContent = [
+    'const uint8_t imageData[] PROGMEM = {',
+    formattedData.join(',\n'),
+    '};',
+    `const uint16_t imageWidth = ${canvas.width};`,
+    `const uint16_t imageHeight = ${canvas.height};`,
+    `const uint8_t colorMode = ${colorModeValue};`
+  ].join('\n');
+
+  const blob = new Blob([arrayContent], { type: 'text/plain' });
+  const link = document.createElement('a');
+  link.download = 'imagedata.h';
+  link.href = URL.createObjectURL(blob);
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
 
 function updateButtonStatus(forceDisabled = false) {
@@ -256,7 +309,7 @@ function handleNotify(value, idx) {
     epdpins.value = bytes2hex(data.slice(0, 7));
     if (data.length > 10) epdpins.value += bytes2hex(data.slice(10, 11));
     epddriver.value = bytes2hex(data.slice(7, 8));
-    filterDitheringOptions();
+    updateDitcherOptions();
   } else {
     if (textDecoder == null) textDecoder = new TextDecoder();
     addLog(textDecoder.decode(data), '⇓');
@@ -291,6 +344,15 @@ async function connect() {
     appVersion = 0x15;
   }
 
+  if (appVersion < 0x16) {
+    const oldURL = "https://tsl0922.github.io/EPD-nRF5/v1.5";
+    alert("!!!注意!!!\n当前固件版本过低，可能无法正常使用部分功能，建议升级到最新版本。");
+    if (confirm('是否访问旧版本上位机？')) location.href = oldURL;
+    setTimeout(() => {
+      addLog(`如遇到问题，可访问旧版本上位机: ${oldURL}`);
+    }, 500);
+  }
+
   try {
     await epdCharacteristic.startNotifications();
     epdCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
@@ -315,15 +377,15 @@ function addLog(logTXT, action = '') {
   const log = document.getElementById("log");
   const now = new Date();
   const time = String(now.getHours()).padStart(2, '0') + ":" +
-         String(now.getMinutes()).padStart(2, '0') + ":" +
-         String(now.getSeconds()).padStart(2, '0') + " ";
+    String(now.getMinutes()).padStart(2, '0') + ":" +
+    String(now.getSeconds()).padStart(2, '0') + " ";
 
   const logEntry = document.createElement('div');
   const timeSpan = document.createElement('span');
   timeSpan.className = 'time';
   timeSpan.textContent = time;
   logEntry.appendChild(timeSpan);
-  
+
   if (action !== '') {
     const actionSpan = document.createElement('span');
     actionSpan.className = 'action';
@@ -334,7 +396,7 @@ function addLog(logTXT, action = '') {
 
   log.appendChild(logEntry);
   log.scrollTop = log.scrollHeight;
-  
+
   while (log.childNodes.length > 20) {
     log.removeChild(log.firstChild);
   }
@@ -344,11 +406,26 @@ function clearLog() {
   document.getElementById("log").innerHTML = '';
 }
 
-function onDitheringChange() {
-  const mode = document.getElementById('dithering').value;
-  const thresholdInput = document.getElementById('threshold');
-  thresholdInput.disabled = (mode === '' || mode.startsWith('bwr'));
+function updateCanvasSize() {
+  const selectedSizeName = document.getElementById('canvasSize').value;
+  const selectedSize = canvasSizes.find(size => size.name === selectedSizeName);
+
+  canvas.width = selectedSize.width;
+  canvas.height = selectedSize.height;
+
   updateImage(false);
+}
+
+function updateDitcherOptions() {
+  const epdDriverSelect = document.getElementById('epddriver');
+  const selectedOption = epdDriverSelect.options[epdDriverSelect.selectedIndex];
+  const colorMode = selectedOption.getAttribute('data-color');
+  const canvasSize = selectedOption.getAttribute('data-size');
+
+  if (colorMode) document.getElementById('ditherMode').value = colorMode;
+  if (canvasSize) document.getElementById('canvasSize').value = canvasSize;
+
+  updateCanvasSize(); // always update image
 }
 
 function updateImage(clear = false) {
@@ -360,9 +437,14 @@ function updateImage(clear = false) {
   const file = image_file.files[0];
   let image = new Image();;
   image.src = URL.createObjectURL(file);
-  image.onload = function(event) {
+  image.onload = function (event) {
     URL.revokeObjectURL(this.src);
     ctx.drawImage(image, 0, 0, image.width, image.height, 0, 0, canvas.width, canvas.height);
+
+    // Redraw text and lines
+    redrawTextElements();
+    redrawLineSegments();
+
     convertDithering()
   }
 }
@@ -371,59 +453,44 @@ function clearCanvas() {
   if (confirm('清除画布已有内容?')) {
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    textElements = []; // Clear stored text positions
+    lineSegments = []; // Clear stored line segments
     return true;
   }
   return false;
 }
 
 function convertDithering() {
-  const mode = document.getElementById('dithering').value;
-  if (mode === '') return;
+  const contrast = parseFloat(document.getElementById('contrast').value);
+  const currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const imageData = new ImageData(
+    new Uint8ClampedArray(currentImageData.data),
+    currentImageData.width,
+    currentImageData.height
+  );
 
-  if (mode.startsWith('bwr')) {
-    ditheringCanvasByPalette(canvas, bwrPalette, mode);
-  } else {
-    const threshold = document.getElementById('threshold').value;
-    dithering(ctx, canvas.width, canvas.height, parseInt(threshold), mode);
-  }
-}
+  adjustContrast(imageData, contrast);
 
-function filterDitheringOptions() {
-  const driver = document.getElementById('epddriver').value;
-  const dithering = document.getElementById('dithering');
-  let currentOptionStillValid = false;
-  let lastValidOptionValue = null;
-
-  for (let optgroup of dithering.getElementsByTagName('optgroup')) {
-    const drivers = optgroup.getAttribute('data-driver').split('|');
-    const show = drivers.includes(driver);
-    for (option of optgroup.getElementsByTagName('option')) {
-      if (show) {
-        option.removeAttribute('disabled');
-        if (option.value == dithering.value) currentOptionStillValid = true;
-        lastValidOptionValue = option.value;
-      } else {
-        option.setAttribute('disabled', 'disabled');
-      }
-    }
-  }
-  if (!currentOptionStillValid) dithering.value = lastValidOptionValue;
+  const mode = document.getElementById('ditherMode').value;
+  const processedData = processImageData(ditherImage(imageData));
+  const finalImageData = decodeProcessedData(processedData, canvas.width, canvas.height, mode);
+  ctx.putImageData(finalImageData, 0, 0);
 }
 
 function checkDebugMode() {
   const link = document.getElementById('debug-toggle');
   const urlParams = new URLSearchParams(window.location.search);
   const debugMode = urlParams.get('debug');
-  
+
   if (debugMode === 'true') {
-      document.body.classList.add('debug-mode');
-      link.innerHTML = '正常模式';
-      link.setAttribute('href', window.location.pathname);
-      addLog("注意：开发模式功能已开启！不懂请不要随意修改，否则后果自负！");
+    document.body.classList.add('debug-mode');
+    link.innerHTML = '正常模式';
+    link.setAttribute('href', window.location.pathname);
+    addLog("注意：开发模式功能已开启！不懂请不要随意修改，否则后果自负！");
   } else {
-      document.body.classList.remove('debug-mode');
-      link.innerHTML = '开发模式';
-      link.setAttribute('href', window.location.pathname + '?debug=true');
+    document.body.classList.remove('debug-mode');
+    link.innerHTML = '开发模式';
+    link.setAttribute('href', window.location.pathname + '?debug=true');
   }
 }
 
@@ -435,6 +502,7 @@ document.body.onload = () => {
   ctx.fillStyle = 'white';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  initPaintTools();
   updateButtonStatus();
   checkDebugMode();
 }

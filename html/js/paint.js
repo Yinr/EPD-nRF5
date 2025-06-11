@@ -74,32 +74,8 @@ function initPaintTools() {
   
   setupCanvasForPainting();
 
-  // Override the existing clear_canvas function to clear our text positions too
-  const originalClearCanvas = window.clear_canvas;
-  window.clear_canvas = function() {
-    if(originalClearCanvas()) {
-      textElements = []; // Clear stored text positions
-      lineSegments = []; // Clear stored line segments
-      return true;
-    }
-    return false;
-  };
-
-  // Override the existing convert_dithering function to preserve text and lines
-  const originalConvertDithering = window.convert_dithering;
-  window.convert_dithering = function() {
-    originalConvertDithering();
-    // Redraw text and lines after dithering
-    redrawTextElements();
-    redrawLineSegments();
-  };
-
-  // Update the brush color options based on dithering method
-  document.getElementById('dithering').addEventListener('change', updateBrushOptions);
-  
   // Ensure no tool is selected by default
   updateToolUI();
-  updateBrushOptions();
 }
 
 function setActiveTool(tool, title) {
@@ -112,29 +88,17 @@ function setActiveTool(tool, title) {
   cancelTextPlacement();
 }
 
-function updateBrushOptions() {
-  const dithering = document.getElementById('dithering').value;
-  const brushColor = document.getElementById('brush-color');
-  for (option of brushColor.getElementsByTagName('option')) {
-    if (option.value === '#FF0000') {
-      if (dithering.startsWith('bwr'))
-        option.removeAttribute('disabled');
-      else
-        option.setAttribute('disabled', 'disabled');
-    }
-  }
-  // Revert brush color to black if red is not allowed
-  if (!dithering.startsWith('bwr') && brushColor.value === '#FF0000') {
-    brushColor.value = '#000000';
-  }
-}
-
 function updateToolUI() {
   // Update UI to reflect active tool or no tool
   document.getElementById('brush-mode').classList.toggle('active', currentTool === 'brush');
   document.getElementById('eraser-mode').classList.toggle('active', currentTool === 'eraser');
   document.getElementById('text-mode').classList.toggle('active', currentTool === 'text');
-  
+
+  // Show/hide brush tools
+  document.querySelectorAll('.brush-tools').forEach(el => {
+    el.style.display = ['brush', 'text'].includes(currentTool) ? 'flex' : 'none';
+  });
+
   // Show/hide text tools
   document.querySelectorAll('.text-tools').forEach(el => {
     el.style.display = currentTool === 'text' ? 'flex' : 'none';
@@ -446,8 +410,3 @@ function redrawLineSegments() {
     ctx.stroke();
   });
 }
-
-// Initialize paint functionality when the page loads
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(initPaintTools, 500); // Delay to ensure canvas is initialized
-});
