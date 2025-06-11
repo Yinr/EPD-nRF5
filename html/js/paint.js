@@ -74,26 +74,6 @@ function initPaintTools() {
   
   setupCanvasForPainting();
 
-  // Override the existing clear_canvas function to clear our text positions too
-  const originalClearCanvas = window.clear_canvas;
-  window.clear_canvas = function() {
-    if(originalClearCanvas()) {
-      textElements = []; // Clear stored text positions
-      lineSegments = []; // Clear stored line segments
-      return true;
-    }
-    return false;
-  };
-
-  // Override the existing convert_dithering function to preserve text and lines
-  const originalConvertDithering = window.convert_dithering;
-  window.convert_dithering = function() {
-    originalConvertDithering();
-    // Redraw text and lines after dithering
-    redrawTextElements();
-    redrawLineSegments();
-  };
-  
   // Ensure no tool is selected by default
   updateToolUI();
 }
@@ -113,7 +93,12 @@ function updateToolUI() {
   document.getElementById('brush-mode').classList.toggle('active', currentTool === 'brush');
   document.getElementById('eraser-mode').classList.toggle('active', currentTool === 'eraser');
   document.getElementById('text-mode').classList.toggle('active', currentTool === 'text');
-  
+
+  // Show/hide brush tools
+  document.querySelectorAll('.brush-tools').forEach(el => {
+    el.style.display = ['brush', 'text'].includes(currentTool) ? 'flex' : 'none';
+  });
+
   // Show/hide text tools
   document.querySelectorAll('.text-tools').forEach(el => {
     el.style.display = currentTool === 'text' ? 'flex' : 'none';
@@ -425,8 +410,3 @@ function redrawLineSegments() {
     ctx.stroke();
   });
 }
-
-// Initialize paint functionality when the page loads
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(initPaintTools, 500); // Delay to ensure canvas is initialized
-});

@@ -18,6 +18,7 @@ body {
     margin: 0;
     padding: 0;
     font-family: system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
 }
 
 .debug {
@@ -213,31 +214,17 @@ code {
     margin: 0;
     padding: 5px;
     background: #DDD;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: auto;
     font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
     box-sizing: border-box;
-    word-break: break-word;
-}
-
-#log div {
-    padding: 2px 0;
-}
-
-#log .time,
-#log .action {
-    display: inline-block;
-    white-space: nowrap;
 }
 
 #log .time {
     color: #333;
-    margin-right: 0.5em;
 }
 
 #log .action {
     color: #666;
-    margin-right: 0.5em;
 }
 
 #canvas-box {
@@ -346,105 +333,19 @@ label {
     border-bottom: 1px dotted #AAA;
 }
 
-canvas.text-placement-mode {
-    border: 2px dashed var(--primary-color) !important;
-    cursor: text !important; /* Force text cursor */
-}
-
-.canvas-title {
-    display: none;
-    text-align: center;
-    margin-bottom: 5px;
-    color: var(--primary-color);
-}
-
-.canvas-tools {
-    margin-top: 10px;
-    justify-content: center;
-}
-
-.text-tools {
-    display: none;
-}
-
-.tool-button {
-    width: 36px;
-    height: 36px;
-    font-size: 1.2rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 5px;
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 0;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.tool-button:hover {
-    background-color: #e9ecef;
-    border-color: #ced4da;
-}
-
-.tool-button.active {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-}
-
-body.debug-mode .tool-button {
-    background-color: var(--dark-input-bg);
-    border-color: var(--dark-border);
-    color: var(--dark-text);
-}
-
-body.debug-mode .tool-button:hover {
-    background-color: #3a3a3a;
-    border-color: #444;
-}
-
-body.debug-mode .tool-button.active {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-hover);
-}
-
-input[type=text]:disabled,
-input[type=number]:disabled,
-select:disabled {
-    opacity: 0.65;
-    cursor: not-allowed;
-    background-color: #e9ecef;
-    color: #6c757d;
-}
-
-body.debug-mode input[type=text]:disabled,
-body.debug-mode input[type=number]:disabled,
-body.debug-mode select:disabled {
-    background-color: #1a1a1a;
-    color: #666;
-    border-color: #2a2a2a;
-}
-
 @media (max-width: 768px) {
     .flex-container {
         flex-direction: column;
     }
-    .flex-container.options .flex-group label {
-        min-width: 80px;
-    }
 
-    .canvas-tools.flex-container {
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-
-    .canvas-tools .flex-group {
-        justify-content: center;
+    .left-controls,
+    .right-controls {
+        margin-left: 0;
         width: 100%;
+    }
+
+    .canvas-log-container {
+        flex-direction: column;
     }
 
     #log {

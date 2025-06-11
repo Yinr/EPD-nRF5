@@ -40,14 +40,14 @@ static void epd_gui_update(void * p_event_data, uint16_t event_size)
     EPD_GPIO_Init();
     epd_model_t *epd = epd_init((epd_model_id_t)p_epd->config.model_id);
     gui_data_t data = {
-        .bwr             = epd->bwr,
+        .color           = epd->color,
         .width           = epd->width,
         .height          = epd->height,
         .timestamp       = event->timestamp,
         .temperature     = epd->drv->read_temp(),
         .voltage         = EPD_ReadVoltage(),
     };
-    DrawGUI(&data, epd->drv->write_image, p_epd->display_mode);
+    DrawGUI(&data, epd->drv->write_image, (display_mode_t)p_epd->config.display_mode);
     epd->drv->refresh();
     EPD_GPIO_Uninit();
 
@@ -74,7 +74,17 @@ static void on_disconnect(ble_epd_t * p_epd, ble_evt_t * p_ble_evt)
 {
     UNUSED_PARAMETER(p_ble_evt);
     p_epd->conn_handle = BLE_CONN_HANDLE_INVALID;
+    p_epd->epd->drv->sleep();
+    nrf_delay_ms(200); // for sleep
     EPD_GPIO_Uninit();
+}
+
+static void epd_update_display_mode(ble_epd_t * p_epd, display_mode_t mode)
+{
+    if (p_epd->config.display_mode != mode) {
+        p_epd->config.display_mode = mode;
+        epd_config_write(&p_epd->config);
+    }
 }
 
 static void epd_service_on_write(ble_epd_t * p_epd, uint8_t * p_data, uint16_t length)
@@ -114,13 +124,13 @@ static void epd_service_on_write(ble_epd_t * p_epd, uint8_t * p_data, uint16_t l
         } break;
 
       case EPD_CMD_CLEAR:
-          p_epd->display_mode = MODE_NONE;
+          epd_update_display_mode(p_epd, MODE_PICTURE);
           p_epd->epd->drv->clear(length > 1 ? p_data[1] : true);
           break;
 
       case EPD_CMD_SEND_COMMAND:
           if (length < 2) return;
-          EPD_WriteCommand(p_data[1]);
+          EPD_WriteCmd(p_data[1]);
           break;
 
       case EPD_CMD_SEND_DATA:
@@ -128,7 +138,7 @@ static void epd_service_on_write(ble_epd_t * p_epd, uint8_t * p_data, uint16_t l
           break;
 
       case EPD_CMD_REFRESH:
-          p_epd->display_mode = MODE_NONE;
+          epd_update_display_mode(p_epd, MODE_PICTURE);
           p_epd->epd->drv->refresh();
           break;
 
@@ -145,17 +155,13 @@ static void epd_service_on_write(ble_epd_t * p_epd, uint8_t * p_data, uint16_t l
           uint32_t timestamp = (p_data[1] << 24) | (p_data[2] << 16) | (p_data[3] << 8) | p_data[4];
           timestamp += (length > 5 ? (int8_t)p_data[5] : 8) * 60 * 60; // timezone
           set_timestamp(timestamp);
-          p_epd->display_mode = length > 6 ? (display_mode_t)p_data[6] : MODE_CALENDAR;
+          epd_update_display_mode(p_epd, length > 6 ? (display_mode_t)p_data[6] : MODE_CALENDAR);
           ble_epd_on_timer(p_epd, timestamp, true);
       } break;
 
       case EPD_CMD_WRITE_IMAGE: // MSB=0000: ram begin, LSB=1111: black
           if (length < 3) return;
-          if ((p_data[1] >> 4) == 0x00) {
-              bool black = (p_data[1] & 0x0F) == 0x0F;
-              EPD_WriteCommand(black ? p_epd->epd->drv->cmd_write_ram1 : p_epd->epd->drv->cmd_write_ram2);
-          }
-          EPD_WriteData(&p_data[2], length - 2);
+          p_epd->epd->drv->write_ram((p_data[1] >> 4) == 0x00, (p_data[1] & 0x0F) == 0x0F, &p_data[2], length - 2);
           break;
 
       case EPD_CMD_SET_CONFIG:
@@ -231,7 +237,7 @@ static void on_write(ble_epd_t * p_epd, ble_evt_t * p_ble_evt)
 void ble_epd_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 {
     if (p_context == NULL || p_ble_evt == NULL) return;
-    
+
     ble_epd_t *p_epd = (ble_epd_t *)p_context;
     ble_epd_on_ble_evt(p_epd, (ble_evt_t *)p_ble_evt);
 }
@@ -271,7 +277,7 @@ static uint32_t epd_service_init(ble_epd_t * p_epd)
     ble_uuid128_t         base_uuid = BLE_UUID_EPD_SVC_BASE;
     ble_add_char_params_t add_char_params;
     uint8_t               app_version = APP_VERSION;
- 
+
     VERIFY_SUCCESS(sd_ble_uuid_vs_add(&base_uuid, &ble_uuid.type));
 
     ble_uuid.type = ble_uuid.type;
@@ -329,12 +335,14 @@ uint32_t ble_epd_init(ble_epd_t * p_epd)
 
     epd_config_init(&p_epd->config);
     epd_config_read(&p_epd->config);
-    
+
     // write default config
     if (epd_config_empty(&p_epd->config))
     {
         uint8_t cfg[] = EPD_CFG_DEFAULT;
         memcpy(&p_epd->config, cfg, sizeof(cfg));
+        if (p_epd->config.display_mode == 0xFF)
+            p_epd->config.display_mode = MODE_CALENDAR;
         epd_config_write(&p_epd->config);
     }
 
@@ -370,9 +378,9 @@ uint32_t ble_epd_string_send(ble_epd_t * p_epd, uint8_t * p_string, uint16_t len
 void ble_epd_on_timer(ble_epd_t * p_epd, uint32_t timestamp, bool force_update)
 {
     // Update calendar on 00:00:00, clock on every minute
-    if (force_update || 
-        (p_epd->display_mode == MODE_CALENDAR && timestamp % 86400 == 0) ||
-        (p_epd->display_mode == MODE_CLOCK && timestamp % 60 == 0)) {
+    if (force_update ||
+        (p_epd->config.display_mode == MODE_CALENDAR && timestamp % 86400 == 0) ||
+        (p_epd->config.display_mode == MODE_CLOCK && timestamp % 60 == 0)) {
         epd_gui_update_event_t event = { p_epd, timestamp };
         app_sched_event_put(&event, sizeof(epd_gui_update_event_t), epd_gui_update);
     }
