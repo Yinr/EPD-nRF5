@@ -3,12 +3,14 @@
 #include <windows.h>
 #include <stdint.h>
 #include <time.h>
+#include <string.h>
+#include <wchar.h>
 #include "GUI.h"
 
 #define BITMAP_WIDTH   400
 #define BITMAP_HEIGHT  300
-#define WINDOW_WIDTH   420
-#define WINDOW_HEIGHT  340
+#define WINDOW_WIDTH   450
+#define WINDOW_HEIGHT  380
 #define WINDOW_TITLE   TEXT("Emurator")
 
 // Global variables
@@ -162,6 +164,49 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             FillRect(hdc, &clientRect, bgBrush);
             DeleteObject(bgBrush);
             
+            // Calculate border position (same as bitmap position)
+            int scale = 1;
+            int drawX = (clientRect.right - BITMAP_WIDTH * scale) / 2;
+            int drawY = (clientRect.bottom - BITMAP_HEIGHT * scale) / 2;
+            
+            // Draw border around the bitmap area
+            HPEN borderPen = CreatePen(PS_DOT, 1, RGB(0, 0, 255));
+            HPEN oldPen = SelectObject(hdc, borderPen);
+            HBRUSH oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH)); // No fill
+            
+            Rectangle(hdc, drawX - 1, drawY - 1, 
+                     drawX + BITMAP_WIDTH * scale + 1, 
+                     drawY + BITMAP_HEIGHT * scale + 1);
+            
+            SelectObject(hdc, oldPen);
+            SelectObject(hdc, oldBrush);
+            DeleteObject(borderPen);
+            
+            // Draw help text below the bitmap
+            int helpTextY = drawY + BITMAP_HEIGHT * scale + 5;
+            SetTextColor(hdc, RGB(80, 80, 80));
+            SetBkMode(hdc, TRANSPARENT);
+            
+            // Create a smaller font for help text
+            HFONT helpFont = CreateFont(
+                14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, "Arial"
+            );
+            HFONT oldFont = SelectObject(hdc, helpFont);
+            
+            wchar_t helpText[] = L"快捷键: 空格 - 切换模式 | R - 切换BWR | 方向键 - 调整日期/月份";
+            
+            // Calculate text width for centering
+            SIZE textSize;
+            GetTextExtentPoint32W(hdc, helpText, wcslen(helpText), &textSize);
+            int centeredX = drawX + (BITMAP_WIDTH - textSize.cx) / 2;
+            
+            TextOutW(hdc, centeredX, helpTextY, helpText, wcslen(helpText));
+            
+            SelectObject(hdc, oldFont);
+            DeleteObject(helpFont);
+            
             // Use the stored timestamp
             gui_data_t data = {
                 .color           = g_bwr_mode ? 2 : 1,
@@ -170,6 +215,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 .timestamp       = g_display_time,
                 .temperature     = 25,
                 .voltage         = 3.2f,
+                .ssid            = "NRF_EPD_84AC",
             };
             
             // Call DrawGUI to render the interface
@@ -265,7 +311,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     g_hwnd = CreateWindowA(
         "BitmapDemo",
         "Emurator", // Using simple title
-        WS_OVERLAPPEDWINDOW,
+        WS_POPUPWINDOW | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
         CW_USEDEFAULT, CW_USEDEFAULT,
         WINDOW_WIDTH, WINDOW_HEIGHT,
         NULL, NULL, hInstance, NULL
