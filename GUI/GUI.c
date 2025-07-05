@@ -1,6 +1,7 @@
 #include "fonts.h"
 #include "Lunar.h"
 #include "GUI.h"
+#include <time.h>
 #include <stdio.h>
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
@@ -129,25 +130,32 @@ static bool GetFestival(uint16_t year, uint8_t mon, uint8_t day, uint8_t week,
     return false;
 }
 
-static void DrawTimeSyncTip(Adafruit_GFX *gfx)
+static void DrawTimeSyncTip(Adafruit_GFX *gfx, gui_data_t *data)
 {
-    GFX_setFont(gfx, u8g2_font_wqy12_t_lunar);
-    GFX_fillRect(gfx, gfx->_width / 2 - 100, gfx->_height / 2 - 25, 200, 50, GFX_WHITE);
-    GFX_drawRoundRect(gfx, gfx->_width / 2 - 100, gfx->_height / 2 - 25, 200, 50, 5, GFX_BLACK);
-    GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
-    GFX_setCursor(gfx, 149, 145);
-    GFX_printf(gfx, "SYNC TIME!");
-    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
-    GFX_setCursor(gfx, 110, 164);
+    const char *title = "SYNC TIME!";
+    const char *url = "https://tsl0922.github.io/EPD-nRF5";
+
+    int16_t box_w = GFX_getUTF8Width(gfx, url) + 20;
+    int16_t box_h = 50;
+    int16_t box_x = (data->width - box_w) / 2;
+    int16_t box_y = data->height / 2 - box_h / 2;
+
     GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
-    GFX_printf(gfx, "https://tsl0922.github.io/EPD-nRF5");
+    GFX_fillRect(gfx, box_x, box_y, box_w, box_h, GFX_WHITE);
+    GFX_drawRoundRect(gfx, box_x, box_y, box_w, box_h, 5, GFX_BLACK);
+    GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
+    GFX_setCursor(gfx, box_x + (box_w - GFX_getUTF8Width(gfx, title)) / 2, 145);
+    GFX_printf(gfx, title);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    GFX_setCursor(gfx, box_x + 10, 164);
+    GFX_printf(gfx, url);
 }
 
 static void DrawBattery(Adafruit_GFX *gfx, int16_t x, int16_t y, float voltage)
 {
     uint8_t level = (uint8_t)(voltage * 100 / 3.6f);
-    GFX_setCursor(gfx, x - 26, y + 9);
     GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    GFX_setCursor(gfx, x - GFX_getUTF8Width(gfx, "3.2V") - 2, y + 9);
     GFX_printf(gfx, "%.1fV", voltage);
     GFX_fillRect(gfx, x, y, 20, 10, GFX_WHITE);
     GFX_drawRect(gfx, x, y, 20, 10, GFX_BLACK);
@@ -162,56 +170,84 @@ static void DrawTemperature(Adafruit_GFX *gfx, int16_t x, int16_t y, int8_t temp
     GFX_printf(gfx, "%d℃", temp);
 }
 
+static uint8_t GetWeekOfYear(uint8_t year, uint8_t mon, uint8_t mday, uint8_t wday)
+{
+    struct tm tm = {0};
+    tm.tm_year = year;
+    tm.tm_mon = mon;
+    tm.tm_mday = mday;
+    tm.tm_wday = wday;
+    tm.tm_isdst = -1;
+    mktime(&tm);
+    char buffer[3] = {0};
+    strftime(buffer, 3, "%V", &tm);
+    return atoi(buffer);
+}
+
 static void DrawDateHeader(Adafruit_GFX *gfx, int16_t x, int16_t y, tm_t *tm, struct Lunar_Date *Lunar, gui_data_t *data)
 {
-    GFX_setCursor(gfx, x, y);
+    GFX_setCursor(gfx, x, y - 2);
     GFX_printf_styled(gfx, GFX_RED, GFX_WHITE, u8g2_font_helvB18_tn, "%d", tm->tm_year + YEAR0);
     GFX_printf_styled(gfx, GFX_BLACK, GFX_WHITE, u8g2_font_wqy12_t_lunar, "年");
     GFX_printf_styled(gfx, GFX_RED, GFX_WHITE, u8g2_font_helvB18_tn, "%d", tm->tm_mon + 1);
     GFX_printf_styled(gfx, GFX_BLACK, GFX_WHITE, u8g2_font_wqy12_t_lunar, "月");
 
+    int16_t tx = gfx->tx;
+    int16_t ty = y;
+
     GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    GFX_setCursor(gfx, tx, ty);
     if (Lunar->IsLeap) GFX_printf(gfx, " ");
-    GFX_printf(gfx, "%s%s%s %s%s年", Lunar_MonthLeapString[Lunar->IsLeap], Lunar_MonthString[Lunar->Month],
-                     Lunar_DateString[Lunar->Date], Lunar_StemStrig[LUNAR_GetStem(Lunar)],
-                     Lunar_BranchStrig[LUNAR_GetBranch(Lunar)]);
+    GFX_printf(gfx, "%s%s%s", Lunar_MonthLeapString[Lunar->IsLeap], Lunar_MonthString[Lunar->Month],
+                     Lunar_DateString[Lunar->Date]);
     GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
-    GFX_printf(gfx, "[%s]", Lunar_ZodiacString[LUNAR_GetZodiac(Lunar)]);
+    GFX_printf(gfx, " [%d周]", GetWeekOfYear(tm->tm_year, tm->tm_mon, tm->tm_mday, tm->tm_wday));
+ 
+    GFX_setCursor(gfx, tx, ty - 14);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    GFX_printf(gfx, " %s%s年", Lunar_StemStrig[LUNAR_GetStem(Lunar)], Lunar_BranchStrig[LUNAR_GetBranch(Lunar)]);
+    GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
+    GFX_printf(gfx, " [%s]", Lunar_ZodiacString[LUNAR_GetZodiac(Lunar)]);
 
     GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
     DrawBattery(gfx, 366, 6, data->voltage);
-    GFX_setCursor(gfx, 310, y);
+    GFX_setCursor(gfx, data->width - GFX_getUTF8Width(gfx, "NRF_EPD_84AC") - 10, y);
     GFX_printf(gfx, "%s", data->ssid);
 }
 
-static void DrawWeekHeader(Adafruit_GFX *gfx, int16_t x, int16_t y)
+static void DrawWeekHeader(Adafruit_GFX *gfx, int16_t x, int16_t y, gui_data_t *data)
 {
-    GFX_fillRect(gfx, x, y, 380, 24, GFX_RED);
-    GFX_fillRect(gfx, x + 50, y, 280, 24, GFX_BLACK);
     GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    uint8_t w = (data->width - 2 * x) / 7;
+    uint8_t r = (data->width - 2 * x) % 7;
     for (int i = 0; i < 7; i++) {
-        GFX_setTextColor(gfx, GFX_WHITE, (i > 0 && i < 6) ? GFX_BLACK : GFX_RED);
-        GFX_setCursor(gfx, x + 15 + i * 55, y + 16);
-        GFX_printf(gfx, "%s", Lunar_DayString[i]);
+        uint8_t day = (data->week_start + i) % 7;
+        uint16_t bg = (day == 0 || day == 6) ? GFX_RED : GFX_BLACK;
+        GFX_fillRect(gfx, x + i * w, y, i == 6 ? (w + r) : w, 24, bg);
+        GFX_setTextColor(gfx, GFX_WHITE, bg);
+        GFX_setCursor(gfx, x + 18 + i * w, y + 16);
+        GFX_printf(gfx, "%s", Lunar_DayString[day]);
     }
 }
 
-static void DrawMonthDays(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar)
+static void DrawMonthDays(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar, gui_data_t *data)
 {
     uint8_t firstDayWeek = get_first_day_week(tm->tm_year + YEAR0, tm->tm_mon + 1);
+    int8_t adjustedFirstDay = (firstDayWeek - data->week_start + 7) % 7;
     uint8_t monthMaxDays = thisMonthMaxDays(tm->tm_year + YEAR0, tm->tm_mon + 1);
-    uint8_t monthDayRows = 1 + (monthMaxDays - (7 - firstDayWeek) + 6) / 7;
+    uint8_t monthDayRows = 1 + (monthMaxDays - (7 - adjustedFirstDay) + 6) / 7;
 
     for (uint8_t i = 0; i < monthMaxDays; i++) {
         uint16_t year = tm->tm_year + YEAR0;
         uint8_t month = tm->tm_mon + 1;
         uint8_t day = i + 1;
 
-        int16_t week = (firstDayWeek + i) % 7;
-        bool weekend = (week  == 0) || (week == 6);
+        int16_t actualWeek = (firstDayWeek + i) % 7;
+        int16_t displayWeek = (adjustedFirstDay + i) % 7;
+        bool weekend = (actualWeek  == 0) || (actualWeek == 6);
 
-        int16_t x = 22 + week * 55;
-        int16_t y = (monthDayRows > 5 ? 69 : 72) + (firstDayWeek + i) / 7 * (monthDayRows > 5 ? 39 : 48);
+        int16_t x = 22 + displayWeek * 55;
+        int16_t y = (monthDayRows > 5 ? 69 : 72) + (adjustedFirstDay + i) / 7 * (monthDayRows > 5 ? 39 : 48);
 
         if (day == tm->tm_mday) {
             GFX_fillCircle(gfx, x + 11, y + (monthDayRows > 5 ? 10 : 12), 22, GFX_RED);
@@ -228,16 +264,18 @@ static void DrawMonthDays(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar)
         LUNAR_SolarToLunar(Lunar, year, month, day);
 
         char festival[10] = {0};
-        if (GetFestival(year, month, day, week, Lunar, festival)) {
+        if (GetFestival(year, month, day, actualWeek, Lunar, festival)) {
             if (day != tm->tm_mday) GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
             GFX_setCursor(gfx, strlen(festival) > 6 ? x - 6 : x, y + 24);
             GFX_printf(gfx, "%s", festival);
         } else {
-            GFX_setCursor(gfx, x, y + 24);
-            if (Lunar->Date == 1)
-                GFX_printf(gfx, "%s", Lunar_MonthString[Lunar->Month]);
-            else
+            if (Lunar->Date == 1) {
+                GFX_setCursor(gfx, x - 5, y + 24);
+                GFX_printf(gfx, "%s%s", Lunar_MonthLeapString[Lunar->IsLeap], Lunar_MonthString[Lunar->Month]);
+            } else {
+                GFX_setCursor(gfx, x, y + 24);
                 GFX_printf(gfx, "%s", Lunar_DateString[Lunar->Date]);
+            }
         }
         bool work = false;
         if (year == HOLIDAY_YEAR && GetHoliday(month, day, &work)) {
@@ -255,8 +293,8 @@ static void DrawMonthDays(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar)
 static void DrawCalendar(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar, gui_data_t *data)
 {
     DrawDateHeader(gfx, 10, 28, tm, Lunar, data);
-    DrawWeekHeader(gfx, 10, 32);
-    DrawMonthDays(gfx, tm, Lunar);
+    DrawWeekHeader(gfx, 10, 32, data);
+    DrawMonthDays(gfx, tm, Lunar, data);
 }
 
 /* Routine to Draw Large 7-Segment formated number
@@ -323,26 +361,40 @@ static void DrawClock(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar, gui
     DrawTime(gfx, tm, 70, 98, 5, 2);
     GFX_drawFastHLine(gfx, 30, 232, 330, GFX_BLACK);
 
-    GFX_setCursor(gfx, 40, 275);
-    GFX_setFont(gfx, u8g2_font_wqy12_t_lunar);
-    GFX_printf(gfx, "%s%s%s年", Lunar_StemStrig[LUNAR_GetStem(Lunar)], Lunar_BranchStrig[LUNAR_GetBranch(Lunar)],
-        Lunar_ZodiacString[LUNAR_GetZodiac(Lunar)]);
+    GFX_setCursor(gfx, 40, 265);
+    GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
+    GFX_printf(gfx, "%s%s", Lunar_StemStrig[LUNAR_GetStem(Lunar)], Lunar_BranchStrig[LUNAR_GetBranch(Lunar)]);
+    GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
+    GFX_printf(gfx, "%s", Lunar_ZodiacString[LUNAR_GetZodiac(Lunar)]);
+    GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+    GFX_printf(gfx, "年");
+
+    GFX_setCursor(gfx, 40, 285);
+    GFX_printf(gfx, " %d周", GetWeekOfYear(tm->tm_year, tm->tm_mon, tm->tm_mday, tm->tm_wday));
 
     uint8_t day = 0;
     uint8_t JQday = GetJieQiStr(tm->tm_year + YEAR0, tm->tm_mon + 1, tm->tm_mday, &day);
     if (day == 0) {
-        GFX_setCursor(gfx, 320, 275);
+        GFX_setCursor(gfx, data->width - GFX_getUTF8Width(gfx, "小暑") - 50, 275);
+        GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
         GFX_printf(gfx, "%s", JieQiStr[JQday % 24]);
     } else {
-        GFX_setCursor(gfx, 300, 265);
-        GFX_printf(gfx, "离%s", JieQiStr[JQday % 24]);
-        GFX_setCursor(gfx, 290, 285);
-        GFX_printf(gfx, "还有%d天", day);
+        GFX_setCursor(gfx, data->width - GFX_getUTF8Width(gfx, "离小暑") - 50, 265);
+        GFX_printf(gfx, "离%");
+        GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
+        GFX_printf(gfx, "%s", JieQiStr[JQday % 24]);
+        GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
+        char buf[15] = {0};
+        snprintf(buf, sizeof(buf), "还有%d天", day);
+        GFX_setCursor(gfx, data->width - GFX_getUTF8Width(gfx, buf) - 50, 285);
+        GFX_printf(gfx, buf);
     }
 }
 
 void DrawGUI(gui_data_t *data, buffer_callback draw, display_mode_t mode)
 {
+    if (data->week_start > 6 || data->week_start < 0) data->week_start = 0;
+
     tm_t tm = {0};
     struct Lunar_Date Lunar;
 
@@ -375,7 +427,7 @@ void DrawGUI(gui_data_t *data, buffer_callback draw, display_mode_t mode)
         }
         if ((mode == MODE_CALENDAR || mode == MODE_CLOCK) &&
             (tm.tm_year + YEAR0 == 2025 && tm.tm_mon + 1 == 1)) {
-            DrawTimeSyncTip(&gfx);
+            DrawTimeSyncTip(&gfx, data);
         }
     } while(GFX_nextPage(&gfx, draw));
 

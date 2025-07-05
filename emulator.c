@@ -11,18 +11,16 @@
 #define BITMAP_HEIGHT  300
 #define WINDOW_WIDTH   450
 #define WINDOW_HEIGHT  380
-#define WINDOW_TITLE   TEXT("Emurator")
 
 // Global variables
 HINSTANCE g_hInstance;
 HWND g_hwnd;
+HDC g_paintHDC = NULL;
 display_mode_t g_display_mode = MODE_CALENDAR; // Default to calendar mode
 BOOL g_bwr_mode = TRUE;  // Default to BWR mode
+uint8_t g_week_start = 0; // Default week start (0=Sunday, 1=Monday, etc.)
 time_t g_display_time;
 struct tm g_tm_time;
-
-// Add a global variable for the paint HDC
-static HDC g_paintHDC = NULL;
 
 // Implementation of the buffer_callback function
 void DrawBitmap(uint8_t *black, uint8_t *color, uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
@@ -182,22 +180,43 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             SelectObject(hdc, oldBrush);
             DeleteObject(borderPen);
             
+            // Display current mode at the top of the bitmap
+            const wchar_t* modeText = (g_display_mode == MODE_CLOCK) ? L"时钟模式" : L"日历模式";
+            int modeTextY = drawY - 20; // Above the bitmap
+            SetTextColor(hdc, RGB(50, 50, 50));
+            SetBkMode(hdc, TRANSPARENT);
+            
+            // Create a font for mode text
+            HFONT modeFont = CreateFont(
+                16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, "Arial"
+            );
+            HFONT oldFont = SelectObject(hdc, modeFont);
+            
+            // Calculate text width for centering mode text
+            SIZE modeTextSize;
+            GetTextExtentPoint32W(hdc, modeText, wcslen(modeText), &modeTextSize);
+            int modeCenteredX = drawX + (BITMAP_WIDTH - modeTextSize.cx) / 2;
+            
+            TextOutW(hdc, modeCenteredX, modeTextY, modeText, wcslen(modeText));
+            
             // Draw help text below the bitmap
+            const wchar_t helpText[] = L"空格 - 切换模式 | R - 切换颜色 | W - 星期起点 | 方向键 - 调整日期/月份";
             int helpTextY = drawY + BITMAP_HEIGHT * scale + 5;
             SetTextColor(hdc, RGB(80, 80, 80));
-            SetBkMode(hdc, TRANSPARENT);
             
             // Create a smaller font for help text
             HFONT helpFont = CreateFont(
                 14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                 DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, "Arial"
             );
-            HFONT oldFont = SelectObject(hdc, helpFont);
+            SelectObject(hdc, modeFont);
+            DeleteObject(modeFont);
+            SelectObject(hdc, helpFont);
             
-            wchar_t helpText[] = L"快捷键: 空格 - 切换模式 | R - 切换BWR | 方向键 - 调整日期/月份";
-            
-            // Calculate text width for centering
+            // Calculate text width for centering help text
             SIZE textSize;
             GetTextExtentPoint32W(hdc, helpText, wcslen(helpText), &textSize);
             int centeredX = drawX + (BITMAP_WIDTH - textSize.cx) / 2;
@@ -213,6 +232,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 .width           = BITMAP_WIDTH,
                 .height          = BITMAP_HEIGHT,
                 .timestamp       = g_display_time,
+                .week_start      = g_week_start,
                 .temperature     = 25,
                 .voltage         = 3.2f,
                 .ssid            = "NRF_EPD_84AC",
@@ -241,6 +261,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             // Toggle BWR mode with R key
             else if (wParam == 'R') {
                 g_bwr_mode = !g_bwr_mode;
+                InvalidateRect(hwnd, NULL, TRUE);
+            }
+            // Increase week start with W key
+            else if (wParam == 'W') {
+                g_week_start++;
+                if (g_week_start > 6) g_week_start = 0; // Wrap around
                 InvalidateRect(hwnd, NULL, TRUE);
             }
             // Handle arrow keys for month/day adjustment
@@ -285,7 +311,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
             return 0;
             
         default:
-            return DefWindowProc(hwnd, message, wParam, lParam);
+            return DefWindowProcW(hwnd, message, wParam, lParam);
     }
 }
 
@@ -294,23 +320,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     g_hInstance = hInstance;
     
     // Register window class
-    WNDCLASSA wc = {0}; // Using WNDCLASSA for ANSI version
+    WNDCLASSW wc = {0};
     wc.style = CS_HREDRAW | CS_VREDRAW;
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInstance;
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
-    wc.lpszClassName = "BitmapDemo"; // No L prefix - using ANSI strings
+    wc.lpszClassName = L"Emurator";
     
-    if (!RegisterClassA(&wc)) {
-        MessageBoxA(NULL, "Window Registration Failed!", "Error", MB_ICONEXCLAMATION | MB_OK);
+    if (!RegisterClassW(&wc)) {
+        MessageBoxW(NULL, L"Window Registration Failed!", L"Error", MB_ICONEXCLAMATION | MB_OK);
         return 0;
     }
-    
-    // Create the window - explicit use of CreateWindowA for ANSI version
-    g_hwnd = CreateWindowA(
-        "BitmapDemo",
-        "Emurator", // Using simple title
+
+    // Create the window
+    g_hwnd = CreateWindowW(
+        L"Emurator",
+        L"模拟器",
         WS_POPUPWINDOW | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
         CW_USEDEFAULT, CW_USEDEFAULT,
         WINDOW_WIDTH, WINDOW_HEIGHT,
@@ -318,7 +344,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     );
     
     if (!g_hwnd) {
-        MessageBoxA(NULL, "Window Creation Failed!", "Error", MB_ICONEXCLAMATION | MB_OK);
+        MessageBoxW(NULL, L"Window Creation Failed!", L"Error", MB_ICONEXCLAMATION | MB_OK);
         return 0;
     }
     
