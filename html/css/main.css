@@ -202,6 +202,10 @@ code {
     align-items: center;
 }
 
+.flex-group.right {
+    margin-left: auto;
+}
+
 #status {
     margin: 10px 0;
 }
@@ -251,6 +255,11 @@ code {
     height: auto;
     display: block;
     margin: 0 auto;
+}
+
+.canvas-container.crop #canvas {
+    border: 2px dashed var(--primary-color);
+    cursor: grab;
 }
 
 button {
@@ -363,8 +372,19 @@ canvas.text-placement-mode {
     justify-content: center;
 }
 
-.text-tools {
+.text-tools,
+.crop-tools {
     display: none;
+}
+
+.canvas-container.crop .tool-buttons,
+.canvas-container.crop .brush-buttons,
+.canvas-container.crop .text-tools {
+    display: none;
+}
+
+.canvas-container.crop .crop-tools {
+    display: flex;
 }
 
 .tool-button {
@@ -434,6 +454,10 @@ body.debug-mode select:disabled {
     }
     .flex-container.options .flex-group label {
         min-width: 80px;
+    }
+
+    .flex-group.right {
+        margin-left: 0;
     }
 
     .canvas-tools.flex-container {
