@@ -22,31 +22,15 @@
 #include "nrf_gpio.h"
 #include "EPD_config.h"
 
-#define BIT(n)  (1UL << (n))
-
-/**@brief EPD driver structure.
- *
- * @details This structure contains epd driver functions.
- */
-typedef struct
-{
-    void (*init)();                                   /**< Initialize the e-Paper register */
-    void (*clear)(bool refresh);                      /**< Clear screen */
-    void (*write_image)(uint8_t *black, uint8_t *color, uint16_t x, uint16_t y, uint16_t w, uint16_t h); /**< write image */
-    void (*write_ram)(bool begin, bool black, uint8_t *data, uint8_t len); /* write data to epd ram */
-    void (*refresh)(void);                            /**< Sends the image buffer in RAM to e-Paper and displays */
-    void (*sleep)(void);                              /**< Enter sleep mode */
-    int8_t (*read_temp)(void);                        /**< Read temperature from driver chip */
-} epd_driver_t;
-
 typedef enum
 {
-    EPD_UC8176_420_BW = 1,
-    EPD_UC8176_420_BWR = 3,
-    EPD_SSD1619_420_BWR = 2,
-    EPD_SSD1619_420_BW = 4,
-    EPD_JD79668_420_BWRY = 5,
-} epd_model_id_t;
+    EPD_DRIVER_IC_UC8176 = 1,
+    EPD_DRIVER_IC_SSD1619 = 2,
+    EPD_DRIVER_IC_JD79668 = 3,
+    EPD_DRIVER_IC_UC8159 = 4,
+    EPD_DRIVER_IC_UC8179 = 5,
+    EPD_DRIVER_IC_SSD1677 = 6,
+} epd_driver_ic_t;
 
 typedef enum
 {
@@ -55,14 +39,47 @@ typedef enum
     BWRY = 3,
 } epd_color_t;
 
+typedef enum
+{
+    EPD_UC8176_420_BW = 1,
+    EPD_UC8176_420_BWR = 3,
+    EPD_SSD1619_420_BWR = 2,
+    EPD_SSD1619_420_BW = 4,
+    EPD_JD79668_420_BWRY = 5,
+    EPD_UC8179_750_BW = 6,
+    EPD_UC8179_750_BWR = 7,
+    EPD_UC8159_750_LOW_BW = 8,
+    EPD_UC8159_750_LOW_BWR = 9,
+    EPD_SSD1677_750_HD_BW = 10,
+    EPD_SSD1677_750_HD_BWR = 11,
+} epd_model_id_t;
+
+struct epd_driver;
+
 typedef struct
 {
     epd_model_id_t id;
     epd_color_t color;
-    epd_driver_t *drv;
+    struct epd_driver *drv;
     uint16_t width;
     uint16_t height;
 } epd_model_t;
+
+/**@brief EPD driver structure.
+ *
+ * @details This structure contains epd driver functions.
+ */
+typedef struct epd_driver
+{
+    epd_driver_ic_t ic;                                  /**< EPD driver IC type */
+    void (*init)(epd_model_t *epd);                 /**< Initialize the e-Paper register */
+    void (*clear)(epd_model_t *epd, bool refresh);  /**< Clear screen */
+    void (*write_image)(epd_model_t *epd, uint8_t *black, uint8_t *color, uint16_t x, uint16_t y, uint16_t w, uint16_t h); /**< write image */
+    void (*write_ram)(epd_model_t *epd, uint8_t cfg, uint8_t *data, uint8_t len); /* write data to epd ram */
+    void (*refresh)(epd_model_t *epd);              /**< Sends the image buffer in RAM to e-Paper and displays */
+    void (*sleep)(epd_model_t *epd);                /**< Enter sleep mode */
+    int8_t (*read_temp)(epd_model_t *epd);               /**< Read temperature from driver chip */
+} epd_driver_t;
 
 #define LOW             (0x0)
 #define HIGH            (0x1)
@@ -113,7 +130,6 @@ void EPD_LED_BLINK(void);
 // VDD voltage
 float EPD_ReadVoltage(void);
 
-epd_model_t *epd_get(void);
 epd_model_t *epd_init(epd_model_id_t id);
 
 #endif

@@ -22,14 +22,11 @@
 #include "nrf_log.h"
 
 #if defined(S112)
-//#define EPD_CFG_DEFAULT {0x14, 0x13, 0x06, 0x05, 0x04, 0x03, 0x02, 0x02, 0xFF, 0x12, 0x07} // 52811
-#define EPD_CFG_DEFAULT {0x14, 0x13, 0x12, 0x11, 0x10, 0x0F, 0x0E, 0x02, 0xFF, 0x0D, 0x02} // 52810
+#define EPD_CFG_52811 {0x14, 0x13, 0x06, 0x05, 0x04, 0x03, 0x02, 0x02, 0xFF, 0x12, 0x07}
+#define EPD_CFG_52810 {0x14, 0x13, 0x12, 0x11, 0x10, 0x0F, 0x0E, 0x02, 0xFF, 0x0D, 0x02}
 #else
-//#define EPD_CFG_DEFAULT {0x05, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x01, 0x07}
-#endif
-
-#ifndef EPD_CFG_DEFAULT
 #define EPD_CFG_DEFAULT {0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x03, 0x09, 0x03}
+// #define EPD_CFG_DEFAULT {0x05, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x01, 0x07}
 #endif
 
 static void epd_gui_update(void * p_event_data, uint16_t event_size)
@@ -40,12 +37,13 @@ static void epd_gui_update(void * p_event_data, uint16_t event_size)
     EPD_GPIO_Init();
     epd_model_t *epd = epd_init((epd_model_id_t)p_epd->config.model_id);
     gui_data_t data = {
+        .mode            = (display_mode_t)p_epd->config.display_mode,
         .color           = epd->color,
         .width           = epd->width,
         .height          = epd->height,
         .timestamp       = event->timestamp,
         .week_start      = p_epd->config.week_start,
-        .temperature     = epd->drv->read_temp(),
+        .temperature     = epd->drv->read_temp(epd),
         .voltage         = EPD_ReadVoltage(),
     };
 
@@ -54,8 +52,8 @@ static void epd_gui_update(void * p_event_data, uint16_t event_size)
     if (err_code == NRF_SUCCESS && dev_name_len > 0)
         data.ssid[dev_name_len] = '\0';
 
-    DrawGUI(&data, epd->drv->write_image, (display_mode_t)p_epd->config.display_mode);
-    epd->drv->refresh();
+    DrawGUI(&data, (buffer_callback)epd->drv->write_image, epd);
+    epd->drv->refresh(epd);
     EPD_GPIO_Uninit();
 
     app_feed_wdt();
@@ -81,7 +79,7 @@ static void on_disconnect(ble_epd_t * p_epd, ble_evt_t * p_ble_evt)
 {
     UNUSED_PARAMETER(p_ble_evt);
     p_epd->conn_handle = BLE_CONN_HANDLE_INVALID;
-    p_epd->epd->drv->sleep();
+    p_epd->epd->drv->sleep(p_epd->epd);
     nrf_delay_ms(200); // for sleep
     EPD_GPIO_Uninit();
 }
@@ -135,20 +133,19 @@ static void epd_service_on_write(ble_epd_t * p_epd, uint8_t * p_data, uint16_t l
           EPD_GPIO_Init();
           break;
 
-      case EPD_CMD_INIT: {
-          uint8_t id = length > 1 ? p_data[1] : p_epd->config.model_id;
-          if (id != p_epd->config.model_id) {
-              p_epd->config.model_id = id;
+      case EPD_CMD_INIT:
+          p_epd->epd = epd_init((epd_model_id_t)(length > 1 ? p_data[1] : p_epd->config.model_id));
+          if (p_epd->epd->id != p_epd->config.model_id) {
+              p_epd->config.model_id = p_epd->epd->id;
               epd_config_write(&p_epd->config);
           }
-          p_epd->epd = epd_init((epd_model_id_t)id);
           epd_send_mtu(p_epd);
           epd_send_time(p_epd);
-        } break;
+          break;
 
       case EPD_CMD_CLEAR:
           epd_update_display_mode(p_epd, MODE_PICTURE);
-          p_epd->epd->drv->clear(length > 1 ? p_data[1] : true);
+          p_epd->epd->drv->clear(p_epd->epd, length > 1 ? p_data[1] : true);
           break;
 
       case EPD_CMD_SEND_COMMAND:
@@ -162,11 +159,11 @@ static void epd_service_on_write(ble_epd_t * p_epd, uint8_t * p_data, uint16_t l
 
       case EPD_CMD_REFRESH:
           epd_update_display_mode(p_epd, MODE_PICTURE);
-          p_epd->epd->drv->refresh();
+          p_epd->epd->drv->refresh(p_epd->epd);
           break;
 
       case EPD_CMD_SLEEP:
-          p_epd->epd->drv->sleep();
+          p_epd->epd->drv->sleep(p_epd->epd);
           break;
 
       case EPD_CMD_SET_TIME: {
@@ -192,7 +189,7 @@ static void epd_service_on_write(ble_epd_t * p_epd, uint8_t * p_data, uint16_t l
 
       case EPD_CMD_WRITE_IMAGE: // MSB=0000: ram begin, LSB=1111: black
           if (length < 3) return;
-          p_epd->epd->drv->write_ram((p_data[1] >> 4) == 0x00, (p_data[1] & 0x0F) == 0x0F, &p_data[2], length - 2);
+          p_epd->epd->drv->write_ram(p_epd->epd, p_data[1], &p_data[2], length - 2);
           break;
 
       case EPD_CMD_SET_CONFIG:
@@ -370,8 +367,18 @@ uint32_t ble_epd_init(ble_epd_t * p_epd)
     // write default config
     if (epd_config_empty(&p_epd->config))
     {
+#if defined(S112)
+        if (NRF_FICR->INFO.PART == 0x52810) {
+            uint8_t cfg[] = EPD_CFG_52810;
+            memcpy(&p_epd->config, cfg, sizeof(cfg));
+        } else {
+            uint8_t cfg[] = EPD_CFG_52811;
+            memcpy(&p_epd->config, cfg, sizeof(cfg));
+        }
+#else
         uint8_t cfg[] = EPD_CFG_DEFAULT;
         memcpy(&p_epd->config, cfg, sizeof(cfg));
+#endif
         if (p_epd->config.display_mode == 0xFF)
             p_epd->config.display_mode = MODE_CALENDAR;
         if (p_epd->config.week_start == 0xFF)

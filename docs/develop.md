@@ -43,4 +43,4 @@ pacman -S make mingw-w64-x86_64-gcc
 
 修改 GUI 目录下的代码后，重新执行上面的 make 命令编译即可。
 
-> **注意:** GUI 目录下的代码不可依赖平台相关的东西，比如单片机特有的 API 接口，否则在 Windows 下编译会失败。正确的做法是：在调用 `DrawGUI(gui_data_t *data, buffer_callback draw, display_mode_t mode)` 函数前就把数据算好并放到 `gui_data_t` 里，然后通过 `data` 参数传进去。
+> **注意:** GUI 目录下的代码不可依赖平台相关的东西，比如单片机特有的 API 接口，否则在 Windows 下编译会失败。正确的做法是：在调用 `DrawGUI` 函数前就把数据算好并放到 `gui_data_t` 里，然后通过 `data` 参数传进去。

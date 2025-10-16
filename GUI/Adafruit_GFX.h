@@ -14,7 +14,7 @@
 #define GFX_GREEN     0x07E0 //   0, 255,   0
 #define GFX_ORANGE    0xFC00 // 255, 128,   0
 
-typedef void (*buffer_callback)(uint8_t *black, uint8_t *color, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
+typedef void (*buffer_callback)(void *user_data, uint8_t *black, uint8_t *color, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 
 typedef enum {
   GFX_ROTATE_0   = 0,
@@ -51,12 +51,14 @@ void GFX_begin_4c(Adafruit_GFX *gfx, int16_t w, int16_t h, int16_t buffer_height
 void GFX_setRotation(Adafruit_GFX *gfx, GFX_Rotate r);
 void GFX_setWindow(Adafruit_GFX *gfx, uint16_t x, uint16_t y, uint16_t w, uint16_t h);
 void GFX_firstPage(Adafruit_GFX *gfx);
-bool GFX_nextPage(Adafruit_GFX *gfx, buffer_callback callback);
+bool GFX_nextPage(Adafruit_GFX *gfx, buffer_callback callback, void *user_data);
 void GFX_end(Adafruit_GFX *gfx);
 
 // DRAW API
 void GFX_drawPixel(Adafruit_GFX *gfx, int16_t x, int16_t y, uint16_t color);
 void GFX_drawLine(Adafruit_GFX *gfx, int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t color);
+void GFX_drawDottedLine(Adafruit_GFX *gfx, int16_t x0, int16_t y0, int16_t x1, int16_t y1,
+                          uint16_t color, uint8_t dot_len, uint8_t space_len);
 void GFX_drawFastVLine(Adafruit_GFX *gfx, int16_t x, int16_t y, int16_t h, uint16_t color);
 void GFX_drawFastHLine(Adafruit_GFX *gfx, int16_t x, int16_t y, int16_t w, uint16_t color);
 void GFX_fillRect(Adafruit_GFX *gfx, int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
@@ -87,10 +89,12 @@ void GFX_setFontDirection(Adafruit_GFX *gfx, GFX_Rotate d);
 void GFX_setTextColor(Adafruit_GFX *gfx, uint16_t fg, uint16_t bg);
 int8_t GFX_getFontAscent(Adafruit_GFX *gfx);
 int8_t GFX_getFontDescent(Adafruit_GFX *gfx);
+int8_t GFX_getFontHeight(Adafruit_GFX *gfx);
 int16_t GFX_drawGlyph(Adafruit_GFX *gfx, int16_t x, int16_t y, uint16_t e);
 int16_t GFX_drawStr(Adafruit_GFX *gfx, int16_t x, int16_t y, const char *s);
 int16_t GFX_drawUTF8(Adafruit_GFX *gfx, int16_t x, int16_t y, const char *str);
 int16_t GFX_getUTF8Width(Adafruit_GFX *gfx, const char *str);
+int16_t GFX_getUTF8Widthf(Adafruit_GFX *gfx, const char* format, ...);
 size_t GFX_print(Adafruit_GFX *gfx, const char c);
 size_t GFX_write(Adafruit_GFX *gfx, const char *buffer, size_t size);
 size_t GFX_printf(Adafruit_GFX *gfx, const char* format, ...);

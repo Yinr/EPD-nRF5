@@ -3,10 +3,6 @@
 
 #include "Adafruit_GFX.h"
 
-#ifndef PAGE_HEIGHT
-#define PAGE_HEIGHT ((__HEAP_SIZE / 50) - 8)
-#endif
-
 typedef enum {
     MODE_PICTURE = 0,
     MODE_CALENDAR = 1,
@@ -14,6 +10,7 @@ typedef enum {
 } display_mode_t;
 
 typedef struct {
+    display_mode_t mode;
     uint16_t color;
     uint16_t width;
     uint16_t height;
@@ -24,6 +21,6 @@ typedef struct {
     char ssid[20];
 } gui_data_t;
 
-void DrawGUI(gui_data_t *data, buffer_callback draw, display_mode_t mode);
+void DrawGUI(gui_data_t *data, buffer_callback callback, void *callback_data);
 
 #endif

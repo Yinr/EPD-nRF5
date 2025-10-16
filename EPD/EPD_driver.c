@@ -1,17 +1,3 @@
-/*****************************************************************************
-* | File        : DEV_Config.cpp
-* | Author      : Waveshare team
-* | Function    :
-* | Info        :
-*   Image scanning
-*      Please use progressive scanning to generate images or fonts
-*----------------
-* | This version:   V1.0
-* | Date        :   2018-01-11
-* | Info        :   Basic version
-*
-******************************************************************************/
-
 #include "app_error.h"
 #include "nrf_drv_spi.h"
 #include "EPD_driver.h"
@@ -30,9 +16,6 @@ static uint32_t EPD_BUSY_PIN = 12;
 static uint32_t EPD_BS_PIN = 13;
 static uint32_t EPD_EN_PIN = 0xFF;
 static uint32_t EPD_LED_PIN = 0xFF;
-
-// EPD model
-static epd_model_t *EPD = NULL;
 
 #define SPI_INSTANCE  0 /**< SPI instance index. */
 static const nrf_drv_spi_t spi = NRF_DRV_SPI_INSTANCE(SPI_INSTANCE);  /**< SPI instance. */
@@ -333,31 +316,39 @@ float EPD_ReadVoltage(void)
 // EPD models
 extern epd_model_t epd_uc8176_420_bw;
 extern epd_model_t epd_uc8176_420_bwr;
+extern epd_model_t epd_uc8159_750_bw;
+extern epd_model_t epd_uc8159_750_bwr;
+extern epd_model_t epd_uc8179_750_bw;
+extern epd_model_t epd_uc8179_750_bwr;
 extern epd_model_t epd_ssd1619_420_bwr;
 extern epd_model_t epd_ssd1619_420_bw;
+extern epd_model_t epd_ssd1677_750_bwr;
+extern epd_model_t epd_ssd1677_750_bw;
 extern epd_model_t epd_jd79668_420;
 
 static epd_model_t *epd_models[] = {
     &epd_uc8176_420_bw,
     &epd_uc8176_420_bwr,
+    &epd_uc8159_750_bw,
+    &epd_uc8159_750_bwr,
+    &epd_uc8179_750_bw,
+    &epd_uc8179_750_bwr,
     &epd_ssd1619_420_bwr,
     &epd_ssd1619_420_bw,
+    &epd_ssd1677_750_bwr,
+    &epd_ssd1677_750_bw,
     &epd_jd79668_420,
 };
 
-epd_model_t *epd_get(void)
-{
-    return EPD == NULL ? epd_models[0] : EPD;
-}
-
 epd_model_t *epd_init(epd_model_id_t id)
 {
+    epd_model_t *epd = NULL;
     for (uint8_t i = 0; i < ARRAY_SIZE(epd_models); i++) {
         if (epd_models[i]->id == id) {
-            EPD = epd_models[i];
+            epd = epd_models[i];
         }
     }
-    if (EPD == NULL) EPD = epd_models[0];
-    EPD->drv->init();
-    return EPD;
+    if (epd == NULL) epd = epd_models[0];
+    epd->drv->init(epd);
+    return epd;
 }
