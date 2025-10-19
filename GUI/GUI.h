@@ -19,6 +19,7 @@ typedef struct {
     int8_t temperature;
     float voltage;
     char ssid[20];
+    uint8_t partial_update; // 1: use partial refresh update window, 0: full
 } gui_data_t;
 
 void DrawGUI(gui_data_t *data, buffer_callback callback, void *callback_data);

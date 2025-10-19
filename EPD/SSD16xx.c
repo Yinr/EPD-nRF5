@@ -82,6 +82,38 @@ static void SSD16xx_Update(uint8_t seq)
     EPD_WriteCmd(CMD_MASTER_ACTIVATE);
 }
 
+// Track dirty region written to RAM to support region-limited partial refresh
+static bool s_dirty_valid = false;
+static uint16_t s_dirty_x = 0, s_dirty_y = 0, s_dirty_w = 0, s_dirty_h = 0;
+
+static void SSD16xx_Dirty_Reset(void)
+{
+    s_dirty_valid = false;
+    s_dirty_x = s_dirty_y = s_dirty_w = s_dirty_h = 0;
+}
+
+static void SSD16xx_Dirty_Update(uint16_t x, uint16_t y, uint16_t w, uint16_t h)
+{
+    if (w == 0 || h == 0) return;
+    if (!s_dirty_valid) {
+        s_dirty_valid = true;
+        s_dirty_x = x; s_dirty_y = y; s_dirty_w = w; s_dirty_h = h;
+        return;
+    }
+    uint16_t x2 = (s_dirty_x + s_dirty_w);
+    uint16_t y2 = (s_dirty_y + s_dirty_h);
+    uint16_t nx2 = (x + w);
+    uint16_t ny2 = (y + h);
+    uint16_t nx = (x < s_dirty_x) ? x : s_dirty_x;
+    uint16_t ny = (y < s_dirty_y) ? y : s_dirty_y;
+    uint16_t mx2 = (nx2 > x2) ? nx2 : x2;
+    uint16_t my2 = (ny2 > y2) ? ny2 : y2;
+    s_dirty_x = nx;
+    s_dirty_y = ny;
+    s_dirty_w = (mx2 > nx) ? (mx2 - nx) : 0;
+    s_dirty_h = (my2 > ny) ? (my2 - ny) : 0;
+}
+
 int8_t SSD16xx_Read_Temp(epd_model_t *epd)
 {
     SSD16xx_Update(0xB1);
@@ -140,6 +172,7 @@ void SSD16xx_Init(epd_model_t *epd)
     s_update_mode = EPD_UPDATE_FULL;
     s_custom_lut = NULL;
     s_custom_lut_len = 0;
+    SSD16xx_Dirty_Reset();
 
     _setPartialRamArea(epd, 0, 0, epd->width, epd->height);
 }
@@ -156,6 +189,13 @@ static void SSD16xx_Refresh(epd_model_t *epd)
     NRF_LOG_DEBUG("[EPD]: refresh begin\n");
     NRF_LOG_DEBUG("[EPD]: temperature: %d\n", SSD16xx_Read_Temp(epd));
 
+    // For partial update, set refresh region to dirty bounding box
+    if (s_update_mode == EPD_UPDATE_PARTIAL && s_dirty_valid && s_dirty_w > 0 && s_dirty_h > 0) {
+        _setPartialRamArea(epd, s_dirty_x, s_dirty_y, s_dirty_w, s_dirty_h);
+    } else {
+        _setPartialRamArea(epd, 0, 0, epd->width, epd->height);
+    }
+
     uint8_t seq = (s_update_mode == EPD_UPDATE_PARTIAL) ? 0xCF : 0xF7;
     SSD16xx_Update(seq);
     SSD16xx_WaitBusy((s_update_mode == EPD_UPDATE_PARTIAL) ? 15000 : 30000);
@@ -163,8 +203,12 @@ static void SSD16xx_Refresh(epd_model_t *epd)
 
 //    SSD16xx_Dump_LUT();
 
+    // Reset to full window and power off
     _setPartialRamArea(epd, 0, 0, epd->width, epd->height); // DO NOT REMOVE!
     SSD16xx_Update(0x83);                              // power off
+
+    // Clear dirty region after successful refresh
+    SSD16xx_Dirty_Reset();
 }
 
 void SSD16xx_Clear(epd_model_t *epd, bool refresh)
@@ -175,6 +219,9 @@ void SSD16xx_Clear(epd_model_t *epd, bool refresh)
 
     EPD_FillRAM(CMD_WRITE_RAM1, 0xFF, ram_bytes);
     EPD_FillRAM(CMD_WRITE_RAM2, 0xFF, ram_bytes);
+
+    // Mark whole screen dirty
+    SSD16xx_Dirty_Update(0, 0, epd->width, epd->height);
 
     if (refresh)
         SSD16xx_Refresh(epd);
@@ -189,6 +236,7 @@ void SSD16xx_Write_Image(epd_model_t *epd, uint8_t *black, uint8_t *color, uint1
         return;
 
     _setPartialRamArea(epd, x, y, w, h);
+
     EPD_WriteCmd(CMD_WRITE_RAM1);
     for (uint16_t i = 0; i < h; i++)
     {
@@ -206,6 +254,9 @@ void SSD16xx_Write_Image(epd_model_t *epd, uint8_t *black, uint8_t *color, uint1
                 EPD_WriteByte(black[j + i * wb]);
         }
     }
+
+    // Update dirty region for partial refresh
+    SSD16xx_Dirty_Update(x, y, w, h);
 }
 
 void SSD16xx_Write_Ram(epd_model_t *epd, uint8_t cfg, uint8_t *data, uint8_t len)

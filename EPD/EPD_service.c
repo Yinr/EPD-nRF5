@@ -29,6 +29,8 @@
 // #define EPD_CFG_DEFAULT {0x05, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x01, 0x07}
 #endif
 
+static bool s_clock_initialized = false;
+
 static void epd_gui_update(void * p_event_data, uint16_t event_size)
 {
     epd_gui_update_event_t *event = (epd_gui_update_event_t *)p_event_data;
@@ -45,6 +47,7 @@ static void epd_gui_update(void * p_event_data, uint16_t event_size)
         .week_start      = p_epd->config.week_start,
         .temperature     = epd->drv->read_temp(epd),
         .voltage         = EPD_ReadVoltage(),
+        .partial_update  = 0,
     };
 
     uint16_t dev_name_len = sizeof(data.ssid);
@@ -52,14 +55,20 @@ static void epd_gui_update(void * p_event_data, uint16_t event_size)
     if (err_code == NRF_SUCCESS && dev_name_len > 0)
         data.ssid[dev_name_len] = '\0';
 
-    // Switch to partial refresh for clock mode when supported by the driver
+    // For clock mode, use full refresh for the first draw after mode switch, then partial
+    bool use_partial = (data.mode == MODE_CLOCK) && s_clock_initialized;
+
+    // Switch to partial/full refresh when supported by the driver
     if (epd->drv->set_update_mode) {
-        epd->drv->set_update_mode(epd, (data.mode == MODE_CLOCK) ? EPD_UPDATE_PARTIAL : EPD_UPDATE_FULL);
+        epd->drv->set_update_mode(epd, use_partial ? EPD_UPDATE_PARTIAL : EPD_UPDATE_FULL);
     }
+    data.partial_update = use_partial ? 1 : 0;
 
     DrawGUI(&data, (buffer_callback)epd->drv->write_image, epd);
     epd->drv->refresh(epd);
     EPD_GPIO_Uninit();
+
+    if (data.mode == MODE_CLOCK && !s_clock_initialized) s_clock_initialized = true;
 
     app_feed_wdt();
 }
@@ -94,6 +103,10 @@ static void epd_update_display_mode(ble_epd_t * p_epd, display_mode_t mode)
     if (p_epd->config.display_mode != mode) {
         p_epd->config.display_mode = mode;
         epd_config_write(&p_epd->config);
+        // Reset clock initialized flag when switching to clock mode
+        if (mode == MODE_CLOCK) {
+            s_clock_initialized = false;
+        }
     }
 }
 
