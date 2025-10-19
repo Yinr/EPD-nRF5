@@ -353,6 +353,29 @@ static void DrawTime(Adafruit_GFX *gfx, tm_t *tm, int16_t x, int16_t y, uint16_t
 static void DrawClock(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar, gui_data_t *data)
 {
     uint8_t padding = data->height > 300 ? 100 : 40;
+
+    // Compute time area first so we can optionally restrict window for partial update
+    uint16_t cS = data->height / 45;
+    uint16_t nD = 2;
+    uint16_t time_width = 2 * (nD * (11 * cS + 2) - 2 * cS) + 4 * cS;
+    uint16_t time_height = 20 * cS + 4;
+    int16_t time_x = (data->width - time_width) / 2;
+    int16_t time_y = (68 + (data->height - 68)) / 2 - time_height / 2;
+
+    if (data->partial_update) {
+        // Add a small margin to cover colon and anti-aliasing edges
+        int16_t margin = 2 * cS;
+        int16_t wx = time_x - margin;
+        int16_t wy = time_y - margin;
+        uint16_t ww = time_width + 2 * margin;
+        uint16_t wh = time_height + 2 * margin;
+        if (wx < 0) wx = 0;
+        if (wy < 0) wy = 0;
+        if (wx + ww > data->width) ww = data->width - wx;
+        if (wy + wh > data->height) wh = data->height - wy;
+        GFX_setWindow(gfx, wx, wy, ww, wh);
+    }
+
     GFX_setCursor(gfx, padding, 36);
     GFX_printf_styled(gfx, GFX_RED, GFX_WHITE, u8g2_font_helvB18_tn, "%d", tm->tm_year + YEAR0);
     GFX_printf_styled(gfx, GFX_BLACK, GFX_WHITE, u8g2_font_wqy12_t_lunar, "年");
@@ -379,15 +402,9 @@ static void DrawClock(Adafruit_GFX *gfx, tm_t *tm, struct Lunar_Date *Lunar, gui
     GFX_printf(gfx, "%d℃[%s]", data->temperature, ssid);
 
     GFX_drawFastHLine(gfx, padding - 10, 68, data->width - 2 * (padding - 10), GFX_BLACK);
-    
-    uint16_t cS = data->height / 45;
-    uint16_t nD = 2;
-    uint16_t time_width = 2 * (nD * (11 * cS + 2) - 2 * cS) + 4 * cS;
-    uint16_t time_height = 20 * cS + 4;
-    int16_t time_x = (data->width - time_width) / 2;
-    int16_t time_y = (68 + (data->height - 68)) / 2 - time_height / 2;
+
     DrawTime(gfx, tm, time_x, time_y, cS, nD);
-    
+
     GFX_drawFastHLine(gfx, padding - 10, data->height - 68, data->width - 2 * (padding - 10), GFX_BLACK);
 
     GFX_setCursor(gfx, padding, data->height - 68 + 30);
