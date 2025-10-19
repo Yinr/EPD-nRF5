@@ -58,6 +58,19 @@
 #define CMD_DIGITAL_BLOCK_CTRL 0x7E // Set Digital Block Control
 #define CMD_NOP 0x7F                // NOP
 
+// Runtime state for SSD16xx refresh mode and optional custom LUT
+static epd_update_mode_t s_update_mode = EPD_UPDATE_FULL;
+static const uint8_t *s_custom_lut = NULL;
+static uint16_t s_custom_lut_len = 0;
+
+static void SSD16xx_WriteLUT(const uint8_t *lut, uint16_t len)
+{
+    if (lut == NULL || len == 0) return;
+    EPD_WriteCmd(CMD_WRITE_LUT);
+    // Casting away const is safe as EPD_WriteData does not modify the buffer
+    EPD_WriteData((uint8_t *)lut, (uint8_t)len);
+}
+
 static void SSD16xx_WaitBusy(uint16_t timeout)
 {
     EPD_WaitBusy(HIGH, timeout);
@@ -123,6 +136,11 @@ void SSD16xx_Init(epd_model_t *epd)
     EPD_Write(CMD_BORDER_CTRL, 0x01);
     EPD_Write(CMD_TSENSOR_CTRL, 0x80);
 
+    // Reset runtime state
+    s_update_mode = EPD_UPDATE_FULL;
+    s_custom_lut = NULL;
+    s_custom_lut_len = 0;
+
     _setPartialRamArea(epd, 0, 0, epd->width, epd->height);
 }
 
@@ -130,10 +148,17 @@ static void SSD16xx_Refresh(epd_model_t *epd)
 {
     EPD_Write(CMD_DISP_CTRL1, epd->color == BWR ? 0x80 : 0x40, 0x00);
 
+    // Apply custom LUT for partial update if provided
+    if (s_update_mode == EPD_UPDATE_PARTIAL && s_custom_lut && s_custom_lut_len > 0) {
+        SSD16xx_WriteLUT(s_custom_lut, s_custom_lut_len);
+    }
+
     NRF_LOG_DEBUG("[EPD]: refresh begin\n");
     NRF_LOG_DEBUG("[EPD]: temperature: %d\n", SSD16xx_Read_Temp(epd));
-    SSD16xx_Update(0xF7);
-    SSD16xx_WaitBusy(30000);
+
+    uint8_t seq = (s_update_mode == EPD_UPDATE_PARTIAL) ? 0xCF : 0xF7;
+    SSD16xx_Update(seq);
+    SSD16xx_WaitBusy((s_update_mode == EPD_UPDATE_PARTIAL) ? 15000 : 30000);
     NRF_LOG_DEBUG("[EPD]: refresh end\n");
 
 //    SSD16xx_Dump_LUT();
@@ -202,6 +227,19 @@ void SSD16xx_Sleep(epd_model_t *epd)
     delay(100);
 }
 
+static void SSD16xx_Set_Update_Mode(epd_model_t *epd, epd_update_mode_t mode)
+{
+    (void)epd;
+    s_update_mode = mode;
+}
+
+static void SSD16xx_Set_Custom_LUT(epd_model_t *epd, const uint8_t *lut, uint16_t len)
+{
+    (void)epd;
+    s_custom_lut = lut;
+    s_custom_lut_len = len;
+}
+
 static epd_driver_t epd_drv_ssd1619 = {
     .ic = EPD_DRIVER_IC_SSD1619,
     .init = SSD16xx_Init,
@@ -211,6 +249,8 @@ static epd_driver_t epd_drv_ssd1619 = {
     .refresh = SSD16xx_Refresh,
     .sleep = SSD16xx_Sleep,
     .read_temp = SSD16xx_Read_Temp,
+    .set_update_mode = SSD16xx_Set_Update_Mode,
+    .set_custom_lut = SSD16xx_Set_Custom_LUT,
 };
 
 static epd_driver_t epd_drv_ssd1677 = {
@@ -222,6 +262,8 @@ static epd_driver_t epd_drv_ssd1677 = {
     .refresh = SSD16xx_Refresh,
     .sleep = SSD16xx_Sleep,
     .read_temp = SSD16xx_Read_Temp,
+    .set_update_mode = SSD16xx_Set_Update_Mode,
+    .set_custom_lut = SSD16xx_Set_Custom_LUT,
 };
 
 // SSD1619 400x300 Black/White/Red

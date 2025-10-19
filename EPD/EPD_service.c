@@ -52,6 +52,11 @@ static void epd_gui_update(void * p_event_data, uint16_t event_size)
     if (err_code == NRF_SUCCESS && dev_name_len > 0)
         data.ssid[dev_name_len] = '\0';
 
+    // Switch to partial refresh for clock mode when supported by the driver
+    if (epd->drv->set_update_mode) {
+        epd->drv->set_update_mode(epd, (data.mode == MODE_CLOCK) ? EPD_UPDATE_PARTIAL : EPD_UPDATE_FULL);
+    }
+
     DrawGUI(&data, (buffer_callback)epd->drv->write_image, epd);
     epd->drv->refresh(epd);
     EPD_GPIO_Uninit();

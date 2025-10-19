@@ -1,12 +1,12 @@
 /*****************************************************************************
-* | File      	: DEV_Config.h
+* | File          : DEV_Config.h
 * | Author      : Waveshare team
-* | Function    :	debug with prntf
+* | Function    :    debug with prntf
 * | Info        :
 *   Image scanning
 *      Please use progressive scanning to generate images or fonts
 *----------------
-* |	This version:   V1.0
+* |    This version:   V1.0
 * | Date        :   2018-01-11
 * | Info        :   Basic version
 *
@@ -65,6 +65,12 @@ typedef struct
     uint16_t height;
 } epd_model_t;
 
+// Update mode for display refresh
+typedef enum {
+    EPD_UPDATE_FULL = 0,
+    EPD_UPDATE_PARTIAL = 1,
+} epd_update_mode_t;
+
 /**@brief EPD driver structure.
  *
  * @details This structure contains epd driver functions.
@@ -79,6 +85,9 @@ typedef struct epd_driver
     void (*refresh)(epd_model_t *epd);              /**< Sends the image buffer in RAM to e-Paper and displays */
     void (*sleep)(epd_model_t *epd);                /**< Enter sleep mode */
     int8_t (*read_temp)(epd_model_t *epd);               /**< Read temperature from driver chip */
+    // Optional advanced controls (may be NULL if unsupported)
+    void (*set_update_mode)(epd_model_t *epd, epd_update_mode_t mode); /**< Set refresh mode (full/partial) */
+    void (*set_custom_lut)(epd_model_t *epd, const uint8_t *lut, uint16_t len);   /**< Load a custom LUT to driver */
 } epd_driver_t;
 
 #define LOW             (0x0)
