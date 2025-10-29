@@ -29,6 +29,7 @@
 						<option value="05" data-color="fourColor" data-size="4.2_400_300">4.2寸 (四色, JD79668)</option>
 						<option value="06" data-color="blackWhiteColor" data-size="7.5_800_480">7.5寸 (黑白, UC8179)</option>
 						<option value="07" data-color="threeColor" data-size="7.5_800_480">7.5寸 (三色, UC8179)</option>
+						<option value="0c" data-color="fourColor" data-size="7.5_800_480">7.5寸 (四色, JD79668)</option>
 						<option value="08" data-color="blackWhiteColor" data-size="7.5_640_384">7.5寸低分 (黑白, UC8159)</option>
 						<option value="09" data-color="threeColor" data-size="7.5_640_384">7.5寸低分 (三色, UC8159)</option>
 						<option value="0a" data-color="blackWhiteColor" data-size="7.5_880_528">7.5寸HD (黑白, SSD1677)</option>
@@ -145,7 +146,11 @@
 						<button id="brush-mode" title="画笔" class="tool-button">✏️</button>
 						<button id="eraser-mode" title="橡皮擦" class="tool-button">🧽</button>
 						<button id="text-mode" title="添加文字" class="tool-button">T</button>
+						<button id="undo-btn" title="撤销 (Ctrl+Z)" class="tool-button hide">↶</button>
+						<button id="redo-btn" title="重做 (Ctrl+Y)" class="tool-button hide">↷</button>
 					</div>
+				</div>
+				<div class="flex-container canvas-tools">
 					<div class="flex-group brush-tools">
 						<label for="brush-color">颜色:</label>
 						<select id="brush-color">
