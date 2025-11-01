@@ -12,7 +12,7 @@
 廿一廿二廿三廿四廿五廿六廿七廿八廿九三十
 星期一二三四五六日周
 猴鸡狗猪鼠牛虎兔龙蛇马羊
-庚辛壬癸甲乙丙丁戊已
+庚辛壬癸甲乙丙丁戊己
 申酉戌亥子丑寅卯辰巳午未
 小寒大寒立春雨水惊蛰春分清明谷雨立夏小满芒种夏至小暑大暑立秋处暑白露秋分寒露霜降立冬小雪大雪冬至
 年月日
@@ -24,11 +24,6 @@
 休班
  */
 extern const uint8_t u8g2_font_wqy9_t_lunar[] U8G2_FONT_SECTION("u8g2_font_wqy9_t_lunar");
-/**
- * 文字列表:
-0-9 (48-57)
-年月日
- */
 extern const uint8_t u8g2_font_wqy12_t_lunar[] U8G2_FONT_SECTION("u8g2_font_wqy12_t_lunar");
 
 // 以下字库来自 u8g2，用于显示数字
