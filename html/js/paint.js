@@ -63,6 +63,12 @@ class PaintManager {
     this.updateUndoRedoButtons();
   }
 
+  clearHistory() {
+    this.historyStack = [];
+    this.historyStep = -1;
+    this.updateUndoRedoButtons();
+  }
+
   undo() {
     if (this.historyStep > 0) {
       this.historyStep--;
