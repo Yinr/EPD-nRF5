@@ -532,10 +532,30 @@ function updateDitcherOptions() {
 function rotateCanvas() {
   const currentWidth = canvas.width;
   const currentHeight = canvas.height;
+
+  // Capture current canvas content
+  const imageData = ctx.getImageData(0, 0, currentWidth, currentHeight);
+
+  // Swap canvas dimensions
   canvas.width = currentHeight;
   canvas.height = currentWidth;
-  addLog(`画布已旋转: ${currentWidth}x${currentHeight} -> ${canvas.width}x${canvas.height}`);
-  updateImage();
+
+  // Create temporary canvas for rotation
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = currentWidth;
+  tempCanvas.height = currentHeight;
+  const tempCtx = tempCanvas.getContext('2d');
+  tempCtx.putImageData(imageData, 0, 0);
+
+  // Draw rotated image on the resized canvas
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(90 * Math.PI / 180);
+  ctx.drawImage(tempCanvas, -currentWidth / 2, -currentHeight / 2);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+
+  paintManager.clearHistory(); // Clear history as canvas size changed
+  paintManager.clearElements(); // Clear stored text positions and line segments
+  paintManager.saveToHistory(); // Save rotated canvas to history
 }
 
 function clearCanvas() {
