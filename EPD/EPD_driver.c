@@ -187,20 +187,22 @@ void EPD_FillRAM(uint8_t cmd, uint8_t value, uint32_t len) {
     }
 }
 
-void EPD_Reset(uint32_t value, uint16_t duration) {
-    digitalWrite(EPD_RST_PIN, value);
+void EPD_Reset(bool status, uint16_t duration) {
+    digitalWrite(EPD_RST_PIN, status);
     delay(duration);
-    digitalWrite(EPD_RST_PIN, (value == LOW) ? HIGH : LOW);
+    digitalWrite(EPD_RST_PIN, status ? LOW : HIGH);
     delay(duration);
-    digitalWrite(EPD_RST_PIN, value);
+    digitalWrite(EPD_RST_PIN, status);
     delay(duration);
 }
 
-void EPD_WaitBusy(uint32_t value, uint16_t timeout) {
+bool EPD_ReadBusy(void) { return digitalRead(EPD_BUSY_PIN); }
+
+void EPD_WaitBusy(bool status, uint16_t timeout) {
     uint32_t led_status = digitalRead(EPD_LED_PIN);
 
     NRF_LOG_DEBUG("[EPD]: check busy\n");
-    while (digitalRead(EPD_BUSY_PIN) == value) {
+    while (EPD_ReadBusy() == status) {
         if (timeout % 100 == 0) EPD_LED_Toggle();
         delay(1);
         timeout--;
@@ -303,10 +305,9 @@ extern epd_model_t epd_jd79665_750_bwry;
 extern epd_model_t epd_jd79665_583_bwry;
 
 static epd_model_t* epd_models[] = {
-    &epd_uc8176_420_bw,   &epd_uc8176_420_bwr, &epd_uc8159_750_bw,    &epd_uc8159_750_bwr,
-    &epd_uc8179_750_bw,   &epd_uc8179_750_bwr, &epd_ssd1619_420_bwr,  &epd_ssd1619_420_bw,
-    &epd_ssd1677_750_bwr, &epd_ssd1677_750_bw, &epd_jd79668_420_bwry, &epd_jd79665_750_bwry,
-    &epd_jd79665_583_bwry,
+    &epd_uc8176_420_bw,    &epd_uc8176_420_bwr,   &epd_uc8159_750_bw,    &epd_uc8159_750_bwr,  &epd_uc8179_750_bw,
+    &epd_uc8179_750_bwr,   &epd_ssd1619_420_bwr,  &epd_ssd1619_420_bw,   &epd_ssd1677_750_bwr, &epd_ssd1677_750_bw,
+    &epd_jd79668_420_bwry, &epd_jd79665_750_bwry, &epd_jd79665_583_bwry,
 };
 
 epd_model_t* epd_init(epd_model_id_t id) {

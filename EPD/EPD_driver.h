@@ -9,17 +9,6 @@
 #include "nrf_delay.h"
 #include "nrf_gpio.h"
 
-// EPD driver IC types
-typedef enum {
-    EPD_DRIVER_IC_UC8159 = 0x10,
-    EPD_DRIVER_IC_UC8176 = 0x11,
-    EPD_DRIVER_IC_UC8179 = 0x12,
-    EPD_DRIVER_IC_SSD1619 = 0x20,
-    EPD_DRIVER_IC_SSD1677 = 0x21,
-    EPD_DRIVER_IC_JD79668 = 0x30,
-    EPD_DRIVER_IC_JD79665 = 0x31,
-} epd_driver_ic_t;
-
 // UC81xx commands
 enum {
     UC81xx_PSR = 0x00,    // Panel Setting
@@ -121,36 +110,48 @@ enum {
 };
 
 typedef enum {
-    BW = 1,
-    BWR = 2,
-    BWRY = 3,
+    COLOR_BW = 1,
+    COLOR_BWR = 2,
+    COLOR_BWRY = 3,
 } epd_color_t;
+
+// EPD driver IC types
+typedef enum {
+    DRV_IC_UC8159 = 0x10,
+    DRV_IC_UC8176 = 0x11,
+    DRV_IC_UC8179 = 0x12,
+    DRV_IC_SSD1619 = 0x20,
+    DRV_IC_SSD1677 = 0x21,
+    DRV_IC_JD79668 = 0x30,
+    DRV_IC_JD79665 = 0x31,
+} epd_drv_ic_t;
 
 // Do not change the existing IDs!
 typedef enum {
-    EPD_UC8176_420_BW = 1,
-    EPD_UC8176_420_BWR = 3,
-    EPD_SSD1619_420_BWR = 2,
-    EPD_SSD1619_420_BW = 4,
-    EPD_JD79668_420_BWRY = 5,
-    EPD_UC8179_750_BW = 6,
-    EPD_UC8179_750_BWR = 7,
-    EPD_UC8159_750_LOW_BW = 8,
-    EPD_UC8159_750_LOW_BWR = 9,
-    EPD_SSD1677_750_HD_BW = 10,
-    EPD_SSD1677_750_HD_BWR = 11,
-    EPD_JD79665_750_BWRY = 12,
-    EPD_JD79665_583_BWRY = 13,
+    UC8176_420_BW = 1,
+    UC8176_420_BWR = 3,
+    SSD1619_420_BWR = 2,
+    SSD1619_420_BW = 4,
+    JD79668_420_BWRY = 5,
+    UC8179_750_BW = 6,
+    UC8179_750_BWR = 7,
+    UC8159_750_LOW_BW = 8,
+    UC8159_750_LOW_BWR = 9,
+    SSD1677_750_HD_BW = 10,
+    SSD1677_750_HD_BWR = 11,
+    JD79665_750_BWRY = 12,
+    JD79665_583_BWRY = 13,
 } epd_model_id_t;
 
 struct epd_driver;
 
 typedef struct {
-    epd_model_id_t id;
-    epd_color_t color;
-    struct epd_driver* drv;
-    uint16_t width;
-    uint16_t height;
+    const epd_model_id_t id;
+    const epd_color_t color;
+    const struct epd_driver* drv;
+    const epd_drv_ic_t ic;
+    const uint16_t width;
+    const uint16_t height;
 } epd_model_t;
 
 /**@brief EPD driver structure.
@@ -158,7 +159,6 @@ typedef struct {
  * @details This structure contains epd driver functions.
  */
 typedef struct epd_driver {
-    epd_driver_ic_t ic;                            /**< EPD driver IC type */
     void (*init)(epd_model_t* epd);                /**< Initialize the e-Paper register */
     void (*clear)(epd_model_t* epd, bool refresh); /**< Clear screen */
     void (*write_image)(epd_model_t* epd, uint8_t* black, uint8_t* color, uint16_t x, uint16_t y, uint16_t w,
@@ -167,6 +167,7 @@ typedef struct epd_driver {
     void (*refresh)(epd_model_t* epd);     /**< Sends the image buffer in RAM to e-Paper and displays */
     void (*sleep)(epd_model_t* epd);       /**< Enter sleep mode */
     int8_t (*read_temp)(epd_model_t* epd); /**< Read temperature from driver chip */
+    bool (*read_busy)(epd_model_t* epd);   /**< Read busy pin level */
 } epd_driver_t;
 
 #define LOW (0x0)
@@ -206,8 +207,9 @@ uint8_t EPD_ReadByte(void);
         EPD_WriteData(_data, sizeof(_data)); \
     } while (0)
 void EPD_FillRAM(uint8_t cmd, uint8_t value, uint32_t len);
-void EPD_Reset(uint32_t value, uint16_t duration);
-void EPD_WaitBusy(uint32_t value, uint16_t timeout);
+void EPD_Reset(bool status, uint16_t duration);
+bool EPD_ReadBusy(void);
+void EPD_WaitBusy(bool status, uint16_t timeout);
 
 // LED
 void EPD_LED_ON(void);
