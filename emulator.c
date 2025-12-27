@@ -225,7 +225,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
                 .timestamp = g_display_time,
                 .week_start = g_week_start,
                 .temperature = 25,
-                .voltage = 3.2f,
+                .voltage = 2920,
                 .ssid = "NRF_EPD_84AC",
             };
 

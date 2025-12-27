@@ -129,12 +129,26 @@ static void DrawTimeSyncTip(Adafruit_GFX* gfx, gui_data_t* data) {
     GFX_printf(gfx, url);
 }
 
-static void DrawBattery(Adafruit_GFX* gfx, int16_t x, int16_t y, uint8_t iw, float voltage) {
+static uint8_t batt_cal(uint16_t voltage) {
+    uint16_t adc_sample = (voltage * 2047) / 3600;
+    if (adc_sample > 1705)
+        return 100;
+    else if (adc_sample <= 1705 && adc_sample > 1584)
+        return 28 + (uint8_t)(((((adc_sample - 1584) << 16) / (1705 - 1584)) * 72) >> 16);
+    else if (adc_sample <= 1584 && adc_sample > 1360)
+        return 4 + (uint8_t)(((((adc_sample - 1360) << 16) / (1584 - 1360)) * 24) >> 16);
+    else if (adc_sample <= 1360 && adc_sample > 1136)
+        return (uint8_t)(((((adc_sample - 1136) << 16) / (1360 - 1136)) * 4) >> 16);
+    else
+        return 0;
+}
+
+static void DrawBattery(Adafruit_GFX* gfx, int16_t x, int16_t y, uint8_t iw, uint16_t voltage) {
     x -= iw;
-    uint8_t level = (uint8_t)(voltage * 100 / 3.6f);
+    uint8_t level = batt_cal(voltage);
     GFX_setFont(gfx, u8g2_font_wqy9_t_lunar);
     GFX_setCursor(gfx, x - GFX_getUTF8Width(gfx, "3.2V") - 2, y + 9);
-    GFX_printf(gfx, "%.1fV", voltage);
+    GFX_printf(gfx, "%d.%dV", voltage / 1000, (voltage % 1000) / 100);
     GFX_fillRect(gfx, x, y, iw, 10, GFX_WHITE);
     GFX_drawRect(gfx, x, y, iw, 10, GFX_BLACK);
     GFX_fillRect(gfx, x + iw, y + 4, 2, 2, GFX_BLACK);

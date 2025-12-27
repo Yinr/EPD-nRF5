@@ -244,7 +244,7 @@ void EPD_LED_BLINK(void) {
     }
 }
 
-float EPD_ReadVoltage(void) {
+uint16_t EPD_ReadVoltage(void) {
 #if defined(S112)
     volatile int16_t value = 0;
     NRF_SAADC->RESOLUTION = SAADC_RESOLUTION_VAL_10bit;
@@ -286,7 +286,7 @@ float EPD_ReadVoltage(void) {
     NRF_ADC->ENABLE = 0;
 #endif
     NRF_LOG_DEBUG("ADC value: %d\n", value);
-    return (value * 3.6) / (1 << 10);
+    return (value * 3600) / (1 << 10);
 }
 
 // EPD models
