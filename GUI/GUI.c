@@ -12,6 +12,9 @@
     GFX_setFont(gfx, font);                       \
     GFX_printf(gfx, __VA_ARGS__);
 
+// height to use larger layout
+#define large_layout(data) ((data)->height >= 400)
+
 typedef struct {
     uint8_t month;
     uint8_t day;
@@ -194,15 +197,15 @@ static void DrawDateHeader(Adafruit_GFX* gfx, int16_t x, int16_t y, tm_t* tm, st
     GFX_printf(gfx, " [%s]", Lunar_ZodiacString[LUNAR_GetZodiac(Lunar)]);
 
     GFX_setTextColor(gfx, GFX_BLACK, GFX_WHITE);
-    DrawBattery(gfx, data->width - 10 - 2, data->height > 300 ? 16 : 6, 20, data->voltage);
+    DrawBattery(gfx, data->width - 10 - 2, large_layout(data) ? 16 : 6, 20, data->voltage);
     GFX_setCursor(gfx, data->width - GFX_getUTF8Width(gfx, data->ssid) - 10, y);
     GFX_printf(gfx, "%s", data->ssid);
 }
 
 static void DrawWeekHeader(Adafruit_GFX* gfx, int16_t x, int16_t y, gui_data_t* data) {
-    GFX_setFont(gfx, data->height > 300 ? u8g2_font_wqy12_t_lunar : u8g2_font_wqy9_t_lunar);
+    GFX_setFont(gfx, large_layout(data) ? u8g2_font_wqy12_t_lunar : u8g2_font_wqy9_t_lunar);
     uint8_t w = (data->width - 2 * x) / 7;
-    uint8_t h = data->height > 300 ? 32 : 24;
+    uint8_t h = large_layout(data) ? 32 : 24;
     uint8_t r = (data->width - 2 * x) % 7;
     uint8_t fh = (h - GFX_getFontHeight(gfx)) / 2 + GFX_getFontAscent(gfx) + 1;
     int16_t cw = GFX_getUTF8Width(gfx, Lunar_DayString[0]);
@@ -225,7 +228,7 @@ static void DrawMonthDays(Adafruit_GFX* gfx, int16_t x, int16_t y, tm_t* tm, str
 
     int16_t bw = (data->width - x - 10) / 7;
     int16_t bh = (data->height - y - 10) / monthDayRows;
-    bool large = data->height > 300;
+    bool large = large_layout(data);
 
     if (large) {
         for (uint8_t i = 1; i < monthDayRows; i++)
@@ -245,7 +248,8 @@ static void DrawMonthDays(Adafruit_GFX* gfx, int16_t x, int16_t y, tm_t* tm, str
 
         LUNAR_SolarToLunar(Lunar, year, month, day);
 
-        int16_t cr = large ? 13 : 10;
+        int16_t cr = large ? 15 : 11;
+        if (monthDayRows > 5) cr -= 1;  // reduce circle height for 6 week rows
         int16_t bx = x + (bw - 2 * cr) / 2 + displayWeek * bw;
         int16_t by = y + (bh - 2 * cr) / 2 + (i + adjustedFirstDay) / 7 * bh + 3;
 
@@ -256,24 +260,26 @@ static void DrawMonthDays(Adafruit_GFX* gfx, int16_t x, int16_t y, tm_t* tm, str
             GFX_setTextColor(gfx, weekend ? GFX_RED : GFX_BLACK, GFX_WHITE);
         }
 
+        char buf[10] = {0};
+        snprintf(buf, sizeof(buf), "%d", day);
         GFX_setFont(gfx, large ? u8g2_font_helvB18_tn : u8g2_font_helvB14_tn);
-        GFX_setCursor(gfx, bx + (2 * cr - GFX_getUTF8Widthf(gfx, "%d", day)) / 2, by - (cr - GFX_getFontHeight(gfx)));
-        GFX_printf(gfx, "%d", day);
+        GFX_setCursor(gfx, bx + (2 * cr - GFX_getUTF8Width(gfx, buf)) / 2, by - (cr - GFX_getFontHeight(gfx)) - 1);
+        GFX_printf(gfx, "%s", buf);
 
-        char festival[10] = {0};
         GFX_setFont(gfx, large ? u8g2_font_wqy12_t_lunar : u8g2_font_wqy9_t_lunar);
         GFX_setFontMode(gfx, 1);  // transparent
-        if (GetFestival(year, month, day, actualWeek, Lunar, festival)) {
+        if (GetFestival(year, month, day, actualWeek, Lunar, buf)) {
             if (day != tm->tm_mday) GFX_setTextColor(gfx, GFX_RED, GFX_WHITE);
         } else {
             if (Lunar->Date == 1)
-                snprintf(festival, sizeof(festival), "%s%s", Lunar_MonthLeapString[Lunar->IsLeap],
+                snprintf(buf, sizeof(buf), "%s%s", Lunar_MonthLeapString[Lunar->IsLeap],
                          Lunar_MonthString[Lunar->Month]);
             else
-                snprintf(festival, sizeof(festival), "%s", Lunar_DateString[Lunar->Date]);
+                snprintf(buf, sizeof(buf), "%s", Lunar_DateString[Lunar->Date]);
         }
-        GFX_setCursor(gfx, bx + (2 * cr - GFX_getUTF8Width(gfx, festival)) / 2, gfx->ty + GFX_getFontHeight(gfx) + 3);
-        GFX_printf(gfx, "%s", festival);
+        GFX_setCursor(gfx, bx + (2 * cr - GFX_getUTF8Width(gfx, buf)) / 2 + 1,
+                      gfx->ty + GFX_getFontHeight(gfx) + (large ? 5 : 3));
+        GFX_printf(gfx, "%s", buf);
 
         bool work = false;
         if (year == HOLIDAY_YEAR && GetHoliday(month, day, &work)) {
@@ -293,7 +299,7 @@ static void DrawMonthDays(Adafruit_GFX* gfx, int16_t x, int16_t y, tm_t* tm, str
 }
 
 static void DrawCalendar(Adafruit_GFX* gfx, tm_t* tm, struct Lunar_Date* Lunar, gui_data_t* data) {
-    bool large = data->height > 300;
+    bool large = large_layout(data);
     DrawDateHeader(gfx, 10, large ? 38 : 28, tm, Lunar, data);
     DrawWeekHeader(gfx, 10, large ? 44 : 32, data);
     DrawMonthDays(gfx, 10, large ? 84 : 64, tm, Lunar, data);
@@ -316,10 +322,10 @@ static void DrawCalendar(Adafruit_GFX* gfx, tm_t* tm, struct Lunar_Date* Lunar, 
 
    https://forum.arduino.cc/t/fast-7-segment-number-display-for-tft/296619/4
 */
-static void Draw7Number(Adafruit_GFX *gfx, int n, unsigned int xLoc, unsigned int yLoc, char cS, unsigned int fC, unsigned int bC, int nD) {
-    unsigned int num=abs(n),i,t,w,col,h,a,b,j=1,d=0,S2=5*cS,S3=2*cS,S4=7*cS,x1=cS+1,x2=S3+S2+1,y1=yLoc+x1,y3=yLoc+S3+S4+1;
-    unsigned int seg[7][3]={{x1,yLoc,1},{x2,y1,0},{x2,y3+x1,0},{x1,(2*y3)-yLoc,1},{0,y3+x1,0},{0,y1,0},{x1,y3,1}};
-    unsigned char nums[12]={0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F,0x00,0x40},c=(c=abs(cS))>10?10:(c<1)?1:c,cnt=(cnt=abs(nD))>10?10:(cnt<1)?1:cnt;
+static void Draw7Number(Adafruit_GFX *gfx, int16_t n, uint16_t xLoc, uint16_t yLoc, int16_t cS, uint16_t fC, uint16_t bC, int16_t nD) {
+    uint16_t num=abs(n),i,t,w,col,h,a,b,j=1,d=0,S2=5*cS,S3=2*cS,S4=7*cS,x1=cS+1,x2=S3+S2+1,y1=yLoc+x1,y3=yLoc+S3+S4+1;
+    uint16_t seg[7][3]={{x1,yLoc,1},{x2,y1,0},{x2,y3+x1,0},{x1,(2*y3)-yLoc,1},{0,y3+x1,0},{0,y1,0},{x1,y3,1}};
+    uint8_t nums[12]={0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F,0x00,0x40},c=(c=abs(cS))>10?10:(c<1)?1:c,cnt=(cnt=abs(nD))>10?10:(cnt<1)?1:cnt;
     for (xLoc+=cnt*(d=S2+(3*S3)+2);cnt>0;cnt--){
       for (i=(num>9)?num%10:((!cnt)&&(n<0))?11:((nD<0)&&(!num))?10:num,xLoc-=d,num/=10,j=0;j<7;++j){
         col=(nums[i]&(1<<j))?fC:bC;
@@ -341,7 +347,7 @@ static void DrawTime(Adafruit_GFX* gfx, tm_t* tm, int16_t x, int16_t y, uint16_t
 }
 
 static void DrawClock(Adafruit_GFX* gfx, tm_t* tm, struct Lunar_Date* Lunar, gui_data_t* data) {
-    uint8_t padding = data->height > 300 ? 100 : 40;
+    uint8_t padding = large_layout(data) ? 100 : 40;
     GFX_setCursor(gfx, padding, 36);
     GFX_printf_styled(gfx, GFX_RED, GFX_WHITE, u8g2_font_helvB18_tn, "%d", tm->tm_year + YEAR0);
     GFX_printf_styled(gfx, GFX_BLACK, GFX_WHITE, u8g2_font_wqy12_t_lunar, "年");

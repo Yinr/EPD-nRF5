@@ -467,7 +467,20 @@ void GFX_drawDottedLine(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t x1, i
 */
 /**************************************************************************/
 void GFX_drawFastVLine(Adafruit_GFX* gfx, int16_t x, int16_t y, int16_t h, uint16_t color) {
-    GFX_drawLine(gfx, x, y, x, y + h - 1, color);
+    if (h <= 0) return;
+
+    // Boundary check
+    if (x < 0 || x >= gfx->_width) return;
+    if (y < 0) {
+        h += y;
+        y = 0;
+    }
+    if (y + h > gfx->_height) h = gfx->_height - y;
+    if (h <= 0) return;
+
+    for (int16_t i = 0; i < h; i++) {
+        GFX_drawPixel(gfx, x, y + i, color);
+    }
 }
 
 /**************************************************************************/
@@ -480,7 +493,20 @@ void GFX_drawFastVLine(Adafruit_GFX* gfx, int16_t x, int16_t y, int16_t h, uint1
 */
 /**************************************************************************/
 void GFX_drawFastHLine(Adafruit_GFX* gfx, int16_t x, int16_t y, int16_t w, uint16_t color) {
-    GFX_drawLine(gfx, x, y, x + w - 1, y, color);
+    if (w <= 0) return;
+
+    // Boundary check
+    if (y < 0 || y >= gfx->_height) return;
+    if (x < 0) {
+        w += x;
+        x = 0;
+    }
+    if (x + w > gfx->_width) w = gfx->_width - x;
+    if (w <= 0) return;
+
+    for (int16_t i = 0; i < w; i++) {
+        GFX_drawPixel(gfx, x + i, y, color);
+    }
 }
 
 /**************************************************************************/
@@ -564,8 +590,8 @@ void GFX_drawCircle(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t r, uint16
     @param    x0   Center-point x coordinate
     @param    y0   Center-point y coordinate
     @param    r   Radius of circle
-    @param    cornername  Mask bit #1 or bit #2 to indicate which quarters of
-   the circle we're doing
+    @param    cornername  Mask bit #1, #2, #4, and #8 to indicate which quarters
+              of the circle we're doing
     @param    color 16-bit 5-6-5 Color to draw with
 */
 /**************************************************************************/
@@ -620,11 +646,12 @@ void GFX_fillCircle(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t r, uint16
 
 /**************************************************************************/
 /*!
-    @brief  Quarter-circle drawer with fill, used for circles and roundrects
+    @brief  Half-circle drawer with fill, used for circles and roundrects
     @param  x0       Center-point x coordinate
     @param  y0       Center-point y coordinate
     @param  r        Radius of circle
-    @param  corners  Mask bits indicating which quarters we're doing
+    @param  corners  Mask bits indicating which sides of the circle we are
+                     doing, left (1) and/or right (2)
     @param  delta    Offset from center-point, used for round-rects
     @param  color    16-bit 5-6-5 Color to fill with
 */
@@ -662,6 +689,102 @@ void GFX_fillCircleHelper(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t r, 
             py = y;
         }
         px = x;
+    }
+}
+
+/**************************************************************************/
+/*!
+   @brief    Draw an ellipse outline
+    @param    x0   Center-point x coordinate
+    @param    y0   Center-point y coordinate
+    @param    rw   Horizontal radius of ellipse
+    @param    rh   Vertical radius of ellipse
+    @param    color 16-bit 5-6-5 Color to draw with
+*/
+/**************************************************************************/
+void GFX_drawEllipse(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t rw, int16_t rh, uint16_t color) {
+    // Bresenham's ellipse algorithm
+    int16_t x = 0, y = rh;
+    int32_t rw2 = rw * rw, rh2 = rh * rh;
+    int32_t twoRw2 = 2 * rw2, twoRh2 = 2 * rh2;
+
+    int32_t decision = rh2 - (rw2 * rh) + (rw2 / 4);
+
+    // region 1
+    while ((twoRh2 * x) < (twoRw2 * y)) {
+        GFX_drawPixel(gfx, x0 + x, y0 + y, color);
+        GFX_drawPixel(gfx, x0 - x, y0 + y, color);
+        GFX_drawPixel(gfx, x0 + x, y0 - y, color);
+        GFX_drawPixel(gfx, x0 - x, y0 - y, color);
+        x++;
+        if (decision < 0) {
+            decision += rh2 + (twoRh2 * x);
+        } else {
+            decision += rh2 + (twoRh2 * x) - (twoRw2 * y);
+            y--;
+        }
+    }
+
+    // region 2
+    decision = ((rh2 * (2 * x + 1) * (2 * x + 1)) >> 2) + (rw2 * (y - 1) * (y - 1)) - (rw2 * rh2);
+    while (y >= 0) {
+        GFX_drawPixel(gfx, x0 + x, y0 + y, color);
+        GFX_drawPixel(gfx, x0 - x, y0 + y, color);
+        GFX_drawPixel(gfx, x0 + x, y0 - y, color);
+        GFX_drawPixel(gfx, x0 - x, y0 - y, color);
+        y--;
+        if (decision > 0) {
+            decision += rw2 - (twoRw2 * y);
+        } else {
+            decision += rw2 + (twoRh2 * x) - (twoRw2 * y);
+            x++;
+        }
+    }
+}
+
+/**************************************************************************/
+/*!
+   @brief    Draw an ellipse with filled colour
+    @param    x0   Center-point x coordinate
+    @param    y0   Center-point y coordinate
+    @param    rw   Horizontal radius of ellipse
+    @param    rh   Vertical radius of ellipse
+    @param    color 16-bit 5-6-5 Color to draw with
+*/
+/**************************************************************************/
+void GFX_fillEllipse(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t rw, int16_t rh, uint16_t color) {
+    // Bresenham's ellipse algorithm
+    int16_t x = 0, y = rh;
+    int32_t rw2 = rw * rw, rh2 = rh * rh;
+    int32_t twoRw2 = 2 * rw2, twoRh2 = 2 * rh2;
+
+    int32_t decision = rh2 - (rw2 * rh) + (rw2 / 4);
+
+    // region 1
+    while ((twoRh2 * x) < (twoRw2 * y)) {
+        x++;
+        if (decision < 0) {
+            decision += rh2 + (twoRh2 * x);
+        } else {
+            decision += rh2 + (twoRh2 * x) - (twoRw2 * y);
+            GFX_drawFastHLine(gfx, x0 - (x - 1), y0 + y, 2 * (x - 1) + 1, color);
+            GFX_drawFastHLine(gfx, x0 - (x - 1), y0 - y, 2 * (x - 1) + 1, color);
+            y--;
+        }
+    }
+
+    // region 2
+    decision = ((rh2 * (2 * x + 1) * (2 * x + 1)) >> 2) + (rw2 * (y - 1) * (y - 1)) - (rw2 * rh2);
+    while (y >= 0) {
+        GFX_drawFastHLine(gfx, x0 - x, y0 + y, 2 * x + 1, color);
+        GFX_drawFastHLine(gfx, x0 - x, y0 - y, 2 * x + 1, color);
+        y--;
+        if (decision > 0) {
+            decision += rw2 - (twoRw2 * y);
+        } else {
+            decision += rw2 + (twoRh2 * x) - (twoRw2 * y);
+            x++;
+        }
     }
 }
 
@@ -1029,31 +1152,6 @@ int16_t GFX_getUTF8Width(Adafruit_GFX* gfx, const char* str) {
         /* issue #46: we have to add the x offset also */
         w += gfx->u8g2.glyph_x_offset; /* this value is set as a side effect of u8g2_GetGlyphWidth() */
     }
-
-    return w;
-}
-
-int16_t GFX_getUTF8Widthf(Adafruit_GFX* gfx, const char* format, ...) {
-    char buf[64] = {0};
-    char* str = buf;
-    size_t len;
-    va_list va;
-
-    va_start(va, format);
-    len = vsnprintf(buf, sizeof(buf), format, va);
-    va_end(va);
-
-    if (len > sizeof(buf) - 1) {
-        str = malloc(len + 1);
-        if (str == NULL) return 0;
-        va_start(va, format);
-        vsnprintf(str, len + 1, format, va);
-        va_end(va);
-    }
-
-    int16_t w = GFX_getUTF8Width(gfx, str);
-
-    if (str != buf) free(str);
 
     return w;
 }

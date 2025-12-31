@@ -415,14 +415,19 @@ static int16_t u8g2_font_draw_glyph(u8g2_font_t* u8g2, int16_t x, int16_t y, uin
 
 //========================================================
 
+/**
+ * Check, whether the font contains a glyph for the requested encoding.
+ */
 uint8_t u8g2_IsGlyph(u8g2_font_t* u8g2, uint16_t requested_encoding) {
     /* updated to new code */
     if (u8g2_font_get_glyph_data(u8g2, requested_encoding) != NULL) return 1;
     return 0;
 }
 
-/* side effect: updates u8g2->font_decode and u8g2->glyph_x_offset */
-/* actually u8g2_GetGlyphWidth returns the glyph delta x and glyph width itself is set as side effect */
+/**
+ * side effect: updates u8g2->font_decode and u8g2->glyph_x_offset.
+ * actually u8g2_GetGlyphWidth returns the glyph delta x and glyph width itself is set as side effect
+ */
 int8_t u8g2_GetGlyphWidth(u8g2_font_t* u8g2, uint16_t requested_encoding) {
     const uint8_t* glyph_data = u8g2_font_get_glyph_data(u8g2, requested_encoding);
     if (glyph_data == NULL) return 0;
@@ -435,16 +440,49 @@ int8_t u8g2_GetGlyphWidth(u8g2_font_t* u8g2, uint16_t requested_encoding) {
     return u8g2_font_decode_get_signed_bits(&(u8g2->font_decode), u8g2->font_info.bits_per_delta_x);
 }
 
+/**
+ * Defines, whether the glyph and string drawing functions will write the background color (mode 0/solid, is_transparent
+ * = 0) or not (mode 1/transparent, is_transparent = 1).
+ * Default mode is 0 (background color of the characters is overwritten).
+ */
 void u8g2_SetFontMode(u8g2_font_t* u8g2, uint8_t is_transparent) {
     u8g2->font_decode.is_transparent = is_transparent;  // new font procedures
 }
 
+/**
+ * The arguments defines the drawing direction of all strings or glyphs.
+ *
+ * Argument	String Rotation	Description
+ *  0	0 degree	Left to right
+ *  1	90 degree	Top to down
+ *  2	180 degree	Right to left
+ *  3	270 degree	Down to top
+ */
 void u8g2_SetFontDirection(u8g2_font_t* u8g2, uint8_t dir) { u8g2->font_decode.dir = dir; }
 
+/**
+ * Draw a single character.
+ *
+ * The character is placed at the specified pixel posion x and y.
+ * U8g2 supports the lower 16 bit of the unicode character range (plane 0/Basic Multilingual Plane):
+ * The encoding can be any value from 0 to 65535.
+ * The glyph can be drawn only, if the encoding exists in the active font.
+ */
 int16_t u8g2_DrawGlyph(u8g2_font_t* u8g2, int16_t x, int16_t y, uint16_t encoding) {
     return u8g2_font_draw_glyph(u8g2, x, y, encoding);
 }
 
+/**
+ * Draw a string.
+ *
+ * The first character is placed at position x and y.
+ * Use setFont to assign a font before drawing a string on the display.
+ * To draw a character with encoding 127 to 255, use the escape sequence "\xab" (hex value ab) or "\xyz"
+ * (octal value xyz).
+ * This function can not draw any glyph with encoding greater or equal to 256. Use drawUTF8 or drawGlyph to access
+ * glyphs with encoding greater or equal to 256.
+ * The X2 variant will double the size of the sting but will ignore the font direction setting.
+ */
 int16_t u8g2_DrawStr(u8g2_font_t* u8g2, int16_t x, int16_t y, const char* s) {
     int16_t sum, delta;
     sum = 0;
@@ -471,6 +509,9 @@ int16_t u8g2_DrawStr(u8g2_font_t* u8g2, int16_t x, int16_t y, const char* s) {
     return sum;
 }
 
+/**
+ * Define a u8g2 font for the glyph and string drawing functions.
+ */
 void u8g2_SetFont(u8g2_font_t* u8g2, const uint8_t* font) {
     if (u8g2->font != font) {
         u8g2->font = font;
@@ -480,6 +521,12 @@ void u8g2_SetFont(u8g2_font_t* u8g2, const uint8_t* font) {
     }
 }
 
+/**
+ * Set foreground color for font drawing
+ */
 void u8g2_SetForegroundColor(u8g2_font_t* u8g2, uint16_t fg) { u8g2->font_decode.fg_color = fg; }
 
+/**
+ * Set background color for font drawing
+ */
 void u8g2_SetBackgroundColor(u8g2_font_t* u8g2, uint16_t bg) { u8g2->font_decode.bg_color = bg; }

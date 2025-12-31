@@ -72,6 +72,8 @@ void GFX_drawCircleHelper(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t r, 
 void GFX_fillCircle(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t r, uint16_t color);
 void GFX_fillCircleHelper(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t r, uint8_t cornername, int16_t delta,
                           uint16_t color);
+void GFX_drawEllipse(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t rw, int16_t rh, uint16_t color);
+void GFX_fillEllipse(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t rw, int16_t rh, uint16_t color);
 void GFX_drawTriangle(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2,
                       uint16_t color);
 void GFX_fillTriangle(Adafruit_GFX* gfx, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2,
@@ -94,7 +96,6 @@ int16_t GFX_drawGlyph(Adafruit_GFX* gfx, int16_t x, int16_t y, uint16_t e);
 int16_t GFX_drawStr(Adafruit_GFX* gfx, int16_t x, int16_t y, const char* s);
 int16_t GFX_drawUTF8(Adafruit_GFX* gfx, int16_t x, int16_t y, const char* str);
 int16_t GFX_getUTF8Width(Adafruit_GFX* gfx, const char* str);
-int16_t GFX_getUTF8Widthf(Adafruit_GFX* gfx, const char* format, ...);
 size_t GFX_print(Adafruit_GFX* gfx, const char c);
 size_t GFX_write(Adafruit_GFX* gfx, const char* buffer, size_t size);
 size_t GFX_printf(Adafruit_GFX* gfx, const char* format, ...);
