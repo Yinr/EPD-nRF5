@@ -217,6 +217,8 @@ async function sendimg() {
 
   updateButtonStatus(true);
 
+  await write(EpdCmd.INIT);
+
   if (ditherMode === 'fourColor') {
     await writeImage(processedData, 'color');
   } else if (ditherMode === 'threeColor') {
