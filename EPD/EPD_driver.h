@@ -1,5 +1,5 @@
-#ifndef __EPD_DRIVER_H
-#define __EPD_DRIVER_H
+#ifndef __EPD_DRIVER_H__
+#define __EPD_DRIVER_H__
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -8,6 +8,9 @@
 #include "EPD_config.h"
 #include "nrf_delay.h"
 #include "nrf_gpio.h"
+#include "nrf_log.h"
+
+#define EPD_DEBUG(fmt, ...) NRF_LOG_DEBUG("EPD: " fmt "\r\n", ##__VA_ARGS__)
 
 // UC81xx commands
 enum {

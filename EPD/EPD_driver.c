@@ -2,7 +2,6 @@
 
 #include "app_error.h"
 #include "nrf_drv_spi.h"
-#include "nrf_log.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #define BUFFER_SIZE 128
@@ -203,7 +202,7 @@ bool EPD_ReadBusy(void) { return digitalRead(EPD_BUSY_PIN); }
 void EPD_WaitBusy(bool status, uint16_t timeout) {
     uint32_t led_status = digitalRead(EPD_LED_PIN);
 
-    NRF_LOG_DEBUG("[EPD]: check busy\n");
+    EPD_DEBUG("check busy");
     while (EPD_ReadBusy() == status) {
         if (timeout % 100 == 0) {
             app_feed_wdt();
@@ -212,11 +211,11 @@ void EPD_WaitBusy(bool status, uint16_t timeout) {
         delay(1);
         timeout--;
         if (timeout == 0) {
-            NRF_LOG_DEBUG("[EPD]: busy timeout!\n");
+            EPD_DEBUG("busy timeout!");
             break;
         }
     }
-    NRF_LOG_DEBUG("[EPD]: busy release\n");
+    EPD_DEBUG("busy release");
 
     // restore led status
     if (led_status == LOW)
@@ -290,7 +289,7 @@ uint16_t EPD_ReadVoltage(void) {
     NRF_ADC->TASKS_STOP = 1;
     NRF_ADC->ENABLE = 0;
 #endif
-    NRF_LOG_DEBUG("ADC value: %d\n", value);
+    EPD_DEBUG("ADC value: %d", value);
     return (value * 3600) / (1 << 10);
 }
 

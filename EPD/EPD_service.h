@@ -10,8 +10,8 @@
  *
  */
 
-#ifndef __EPD_SERVICE_H
-#define __EPD_SERVICE_H
+#ifndef __EPD_SERVICE_H__
+#define __EPD_SERVICE_H__
 
 #include <inttypes.h>
 #include <stdbool.h>

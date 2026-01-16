@@ -1,5 +1,5 @@
-#ifndef __EPD_CONFIG_H
-#define __EPD_CONFIG_H
+#ifndef __EPD_CONFIG_H__
+#define __EPD_CONFIG_H__
 #include <stdbool.h>
 #include <stdint.h>
 
