@@ -61,7 +61,7 @@ pacman -Syu
 pacman -S make mingw-w64-x86_64-gcc
 ```
 
-Then `cd` to the project directory and execute `make -f Makefile.win32` to compile the emulator executable.
+Then `cd` to the project directory and execute `make` to compile the emulator executable.
 
 **Modifying the GUI:**
 
