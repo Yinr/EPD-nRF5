@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1.0">
+	<meta http-equiv="content-type">
+	<title>电子价签蓝牙控制</title>
+
+	<style>
+		button,
+		a {
+			padding: 6px;
+			margin: 6px;
+			transform-origin: top left;
+			transform: scale(1.1);
+			display: inline-block;
+		}
+	</style>
+</head>
+
+<body>
+
+	<h1>墨水屏传图</h1>
+
+	<input type="file" id="image_file" onchange="update_image()" accept="image/*">
+	<p>
+		<label for="tag_name">价签重命名（最长12字符，1个汉字占3个字符）</label><input id="tag_name" maxlength="12">
+	</p>
+	<p>
+		<select id="resolution" onchange="update_image()">
+			<option value="152*152">152*152</option>
+			<option value="122*250" selected>122*250</option>
+			<option value="128*296">128*296</option>
+			<option value="400*300">400*300</option>
+			<option value="600*448">600*448</option>
+			<option value="640*384">640*384</option>
+			<option value="800*480">800*480</option>
+		</select>
+		<input type="radio" id="bw" name="type" onclick="update_image()">
+		<label for="bw">黑白</label>
+		<input type="radio" id="4gray" name="type" onclick="update_image()">
+		<label for="4gray">4阶灰度</label>
+		<input type="radio" id="bwr" name="type" onclick="update_image()" checked>
+		<label for="bwr">黑白红</label>
+		<input type="radio" id="bwr2" name="type" onclick="update_image()">
+		<label for="bwr2">黑白红(UC8159C)</label>
+		<input type="radio" id="bwry" name="type" onclick="update_image()">
+		<label for="bwry">黑白红黄</label>
+		<input type="radio" id="cmyk" name="type" onclick="update_image()">
+		<label for="cmyk">七色</label>
+		<input type="checkbox" id="dither_mode" onclick="update_image()">
+		<label for="dither_mode">抖动模式</label>
+	</p>
+	<p>
+		<label>主控型号</label>
+		<input type="radio" id="TI" name="pack_len" value="128" checked><label for="TI">TI</label>
+		<input type="radio" id="nRF" name="pack_len" value="20"><label for="nRF">nRF</label>
+	</p>
+
+
+	<label for="canvas-mode">模式：</label>
+	<select id="canvas-mode">
+		<option value="paint" selected>画笔</option>
+		<option value="font" title="输入完成后 点击：保存文本框">输入文字</option>
+	</select>
+	<label for="paint-size">画笔/文字大小：</label>
+	<input type="number" max="13" min="1" step="1" value="3" id="paint-size">
+	<label for="paint-color">画笔颜色：</label>
+	<select id="paint-color">
+		<option value="white">白色</option>
+		<option value="black" selected>黑色</option>
+		<option value="red">红色</option>
+	</select>
+
+	<select id="font" title="字体" style="display: none;">
+		<option value="微软雅黑">微软雅黑</option>
+		<option value="黑体" selected>黑体</option>
+		<option value="仿宋">仿宋</option>
+		<option value="宋体">宋体</option>
+		<option value="楷体_GB2312">楷体_GB2312</option>
+		<option value="华文行楷">华文行楷</option>
+	</select>
+	<p></p>
+	<button onclick="update_image()">重新加载</button>
+	<button id="update-text">保存文本框</button>
+	<button onclick="clear_canvas()">清屏</button>
+	<button onclick="horizon_clip_canvas()">水平翻转</button>
+	<button onclick="vertical_clip_canvas()">垂直翻转</button>
+	<button onclick="rotate_canvas()">顺时针旋转</button>
+
+	<p>
+		<input id="edit-font"
+			style="max-width: auto; position: absolute; border: black solid 1px;background-color: rgba(0,0,0,0);display: none;overflow: auto" />
+		<canvas id="original" style="border: black solid 1px;"></canvas>
+		<canvas id="canvas" style="border: black solid 1px;"></canvas>
+	</p>
+
+	<button id="go">打开蓝牙</button>
+	<progress id="progressBar" value="0" max="100"></progress>
+	<label id="progress"></label>
+
+	<script>
+		/** @typedef {number} ColorGray */
+		/** @typedef {Object} ColorRGB
+		 * @property {number} r
+		 * @property {number} g
+		 * @property {number} b
+		 */
+		/** @typedef {ColorGray | ColorRGB} Color */
+		/** @typedef {number} ColorRAW */
+		/** @typedef {Uint8ClampedArray} ImageData */
+
+		/**
+		 * 电子价签类，用于蓝牙通信和操作
+		 */
+		class PriceTag {
+			/** @type {BluetoothDevice | null} */
+			device;
+
+			constructor() {
+				this.device = null;
+				this.onDisconnected = this.onDisconnected.bind(this);
+			}
+
+			/**
+			 * 请求蓝牙设备
+			 * @returns {Promise<void>}
+			 */
+			async request() {
+				let options = {
+					/** @type {RequestDeviceOptions} */
+					"filters": [{ "services": [0xFFF0] }],
+					"optionalServices": [0xFFF0],
+				};
+				this.device = await navigator.bluetooth.requestDevice(options);
+				if (!this.device) {
+					throw "No device selected";
+				}
+				this.device.addEventListener("gattserverdisconnected", this.onDisconnected);
+			}
+
+			/**
+			 * 连接到蓝牙设备
+			 * @returns {Promise<void>}
+			 */
+			async connect() {
+				if (!this.device) {
+					return Promise.reject("Device is not connected.");
+				}
+				await this.device.gatt.connect();
+			}
+
+			/**
+			 * 读取设备状态
+			 * @returns {Promise<DataView>}
+			 */
+			async readStatus() {
+				const service = await this.device.gatt.getPrimaryService(0xFFF0);
+				const characteristic = await service.getCharacteristic(0xFFF1);
+				return await characteristic.readValue();
+			}
+
+			/**
+			 * 写入命令到设备
+			 * @param {Uint8Array} data
+			 * @returns {Promise<void>}
+			 */
+			async writeCommand(data) {
+				const service = await this.device.gatt.getPrimaryService(0xFFF0);
+				const characteristic = await service.getCharacteristic(0xFFF1);
+				await characteristic.writeValueWithResponse(data);
+			}
+
+			/**
+			 * 写入数据到设备
+			 * @param {Uint8Array} data
+			 * @param {boolean} response 是否需要响应
+			 * @returns {Promise<void>}
+			 */
+			async writeData(data, response) {
+				const service = await this.device.gatt.getPrimaryService(0xFFF0);
+				const characteristic = await service.getCharacteristic(0xFFF2);
+				if (response) {
+					await characteristic.writeValueWithResponse(data);
+				} else {
+					await characteristic.writeValueWithoutResponse(data);
+				}
+			}
+
+			/**
+			 * 重命名设备
+			 * @param {Uint8Array} utf8array
+			 * @returns {Promise<void>}
+			 */
+			async rename(utf8array) {
+				const service = await this.device.gatt.getPrimaryService(0xFFF0);
+				const characteristic = await service.getCharacteristic(0x2A00);
+				await characteristic.writeValueWithResponse(utf8array);
+			}
+
+			/**
+			 * 读取设备哈希值
+			 * @returns {Promise<DataView>}
+			 */
+			async readHash() {
+				const service = await this.device.gatt.getPrimaryService(0xFFF0);
+				const characteristic = await service.getCharacteristic(0xFFF2);
+				return await characteristic.readValue();
+			}
+
+			/**
+			 * 读取设备属性
+			 * @returns {Promise<DataView>}
+			 */
+			async readProperty() {
+				const service = await this.device.gatt.getPrimaryService(0xFFF0);
+				const characteristic = await service.getCharacteristic(0xFFF3);
+				return await characteristic.readValue();
+			}
+
+			/**
+			 * 断开设备连接
+			 * @returns {Promise<void>}
+			 */
+			disconnect() {
+				if (!this.device) {
+					return Promise.reject("Device is not connected.");
+				}
+				return this.device.gatt.disconnect();
+			}
+
+			/**
+			 * 设备断开连接时的回调
+			 */
+			onDisconnected() {
+				console.log("Device is disconnected.");
+			}
+		}
+
+		/** @type {PriceTag} */
+		var priceTag = new PriceTag();
+
+		/**
+		 * 图像抖动处理类
+		 */
+		class ImageDither {
+			/** @type {number} */
+			width;
+			/** @type {number} */
+			height;
+			/** @type {Array<Array<ColorRGB>>} */
+			raw;
+			/** @type {Array<Array<Color>>} */
+			result;
+			/** @type {ImageData} */
+			imageData;
+
+			/**
+			 * @param {number} width 图像宽度
+			 * @param {number} height 图像高度
+			 * @param {ImageData} imageData 图像数据
+			 */
+			constructor(width, height, imageData) {
+				/** @type {Array<Array<ColorRGB>>} */
+				var image = new Array();
+				this.width = width;
+				this.height = height;
+				for (let x = -2; x < width + 2; x++) {
+					image[x] = new Array();
+					for (let y = 0; y < height + 2; y++) {
+						image[x][y] = { r: 0, g: 0, b: 0 };
+					}
+				}
+				var i = 0;
+				for (let y = 0; y < height; y++) {
+					for (let x = 0; x < width; x++) {
+						image[x][y] = { r: imageData[i], g: imageData[i + 1], b: imageData[i + 2] };
+						i += 4;
+					}
+				}
+				this.raw = image; // contains {rgb} object
+			}
+
+			/**
+			 * 添加两个像素
+			 * @param {ColorRGB} p1
+			 * @param {ColorRGB} p2
+			 * @returns {ColorRGB}
+			 */
+			static pixel_add(p1, p2) {
+				return { r: p1.r + p2.r, g: p1.g + p2.g, b: p1.b + p2.b };
+			}
+
+			/**
+			 * 减去两个像素
+			 * @param {ColorRGB} p1
+			 * @param {ColorRGB} p2
+			 * @returns {ColorRGB}
+			 */
+			static pixel_sub(p1, p2) {
+				return { r: p1.r - p2.r, g: p1.g - p2.g, b: p1.b - p2.b };
+			}
+
+			/**
+			 * 像素乘以系数
+			 * @param {ColorRGB} p
+			 * @param {number} a
+			 * @returns {ColorRGB}
+			 */
+			static pixel_mul(p, a) {
+				return { r: p.r * a, g: p.g * a, b: p.b * a };
+			}
+
+			/**
+			 * 计算像素绝对值
+			 * @param {ColorRGB} p
+			 * @returns {number}
+			 */
+			static pixel_abs(p) {
+				return Math.sqrt(p.r * p.r + p.g * p.g + p.b * p.b);
+			}
+
+			/**
+			 * 找到最接近的颜色
+			 * @param {Color} p
+			 * @param {Array<Color>} palette
+			 * @returns {number}
+			 */
+			static find_nearest(p, palette) {
+				var dmin = 99999999;
+				var i = 0, res;
+				if (typeof p == 'number') {
+					for (var c of palette) {
+						let d = Math.abs(c - p);
+						if (d < dmin) {
+							dmin = d;
+							res = i;
+						}
+						i += 1;
+					}
+					return res;
+				}
+
+				for (let c in p) {
+					if (p[c] > 255) {
+						p[c] = 255;
+					} else if (p[c] < 0) {
+						p[c] = 0;
+					}
+				}
+				for (var c of palette) {
+					let d = ImageDither.pixel_abs(ImageDither.pixel_sub(c, p));
+					if (d < dmin) {
+						dmin = d;
+						res = i;
+					}
+					i += 1;
+				}
+				return res;
+			}
+
+			/**
+			 * 应用抖动算法
+			 * @param {Array<Color>} palette
+			 * @param {boolean} mode 是否启用高级抖动模式
+			 */
+			dither(palette, mode) {
+				var width = this.width;
+				var height = this.height;
+				var image = structuredClone(this.raw);
+				var imageData = new Array(width * height * 4);
+				var i = 0;
+				if (typeof palette[0] == 'number') { // gray scale dithering
+					for (let x = -2; x < this.width + 2; x++) {
+						for (let y = 0; y < this.height + 2; y++) {
+							let p = image[x][y];
+							image[x][y] = p.r * 0.299 + p.g * 0.587 + p.b * 0.114;
+						}
+					}
+					for (let y = 0; y < height; y++) {
+						for (let x = 0; x < width; x++) {
+							let cur = image[x][y];
+							let j = ImageDither.find_nearest(cur, palette);
+							image[x][y] = palette[j];
+							let err = cur - palette[j];
+							if (mode) {
+								image[x - 2][y + 1] += err * 3 / 48;
+								image[x + 1][y + 0] += err * 7 / 48;
+								image[x - 1][y + 1] += err * 5 / 48;
+								image[x + 2][y + 0] += err * 5 / 48;
+								image[x + 0][y + 1] += err * 7 / 48;
+								image[x + 1][y + 1] += err * 5 / 48;
+								image[x + 2][y + 1] += err * 3 / 48;
+								image[x - 2][y + 2] += err * 1 / 48;
+								image[x - 1][y + 2] += err * 3 / 48;
+								image[x + 0][y + 2] += err * 5 / 48;
+								image[x + 1][y + 2] += err * 3 / 48;
+								image[x + 2][y + 2] += err * 1 / 48;
+							} else {
+								image[x + 1][y + 0] += err * 7 / 16;
+								image[x - 1][y + 1] += err * 3 / 16;
+								image[x + 0][y + 1] += err * 5 / 16;
+								image[x + 1][y + 1] += err / 16;
+							}
+							imageData[i + 0] = image[x][y];
+							imageData[i + 1] = image[x][y];
+							imageData[i + 2] = image[x][y];
+							imageData[i + 3] = 255;
+							i += 4;
+						}
+					}
+				} else { // RGB dithering
+					for (let y = 0; y < height; y++) {
+						for (let x = 0; x < width; x++) {
+							let cur = image[x][y];
+							let j = ImageDither.find_nearest(cur, palette);
+							image[x][y] = structuredClone(palette[j]);
+							let err = ImageDither.pixel_sub(cur, palette[j]);
+							if (mode) {
+								image[x + 1][y + 0] = ImageDither.pixel_add(image[x + 1][y + 0], ImageDither.pixel_mul(err, 7 / 16));
+								image[x - 1][y + 1] = ImageDither.pixel_add(image[x - 1][y + 1], ImageDither.pixel_mul(err, 3 / 16));
+								image[x + 0][y + 1] = ImageDither.pixel_add(image[x + 0][y + 1], ImageDither.pixel_mul(err, 5 / 16));
+								image[x + 1][y + 1] = ImageDither.pixel_add(image[x + 1][y + 1], ImageDither.pixel_mul(err, 1 / 16));
+							} else {
+								image[x + 2][y + 0] = ImageDither.pixel_add(image[x + 2][y + 0], ImageDither.pixel_mul(err, 5 / 48));
+								image[x - 2][y + 1] = ImageDither.pixel_add(image[x - 2][y + 1], ImageDither.pixel_mul(err, 3 / 48));
+								image[x + 1][y + 0] = ImageDither.pixel_add(image[x + 1][y + 0], ImageDither.pixel_mul(err, 7 / 48));
+								image[x - 1][y + 1] = ImageDither.pixel_add(image[x - 1][y + 1], ImageDither.pixel_mul(err, 5 / 48));
+								image[x + 0][y + 1] = ImageDither.pixel_add(image[x + 0][y + 1], ImageDither.pixel_mul(err, 7 / 48));
+								image[x + 1][y + 1] = ImageDither.pixel_add(image[x + 1][y + 1], ImageDither.pixel_mul(err, 5 / 48));
+								image[x + 2][y + 1] = ImageDither.pixel_add(image[x + 2][y + 1], ImageDither.pixel_mul(err, 3 / 48));
+								image[x - 2][y + 2] = ImageDither.pixel_add(image[x - 2][y + 2], ImageDither.pixel_mul(err, 1 / 48));
+								image[x - 1][y + 2] = ImageDither.pixel_add(image[x - 1][y + 2], ImageDither.pixel_mul(err, 3 / 48));
+								image[x + 0][y + 2] = ImageDither.pixel_add(image[x + 0][y + 2], ImageDither.pixel_mul(err, 5 / 48));
+								image[x + 1][y + 2] = ImageDither.pixel_add(image[x + 1][y + 2], ImageDither.pixel_mul(err, 3 / 48));
+								image[x + 2][y + 2] = ImageDither.pixel_add(image[x + 2][y + 2], ImageDither.pixel_mul(err, 1 / 48));
+							}
+							imageData[i + 0] = image[x][y].r;
+							imageData[i + 1] = image[x][y].g;
+							imageData[i + 2] = image[x][y].b;
+							imageData[i + 3] = 255;
+							i += 4;
+						}
+					}
+				}
+				this.result = image; // contains result ({rgb} objects or gray-scale numbers) for further processing
+				this.imageData = imageData; // contains rgba list for preview
+			}
+
+			/**
+			 * 将图像转换为字节数组
+			 * @param {Array<Color>} palette
+			 * @param {boolean} rot 是否旋转
+			 * @param {boolean} two_pixel_one_byte 是否两个像素占一个字节
+			 * @returns {{o1: Array<ColorRAW>, o2: Array<ColorRAW>}}
+			 */
+			toBytes(palette, rot, two_pixel_one_byte) {
+				// based on 2-bit index of pixel in palette
+				var outputData1 = [], outputData2 = [];
+				var width, height;
+				width = rot ? this.height : this.width;
+				height = rot ? this.width : this.height;
+
+				for (let y = 0; y < height; y++) {
+					let a1, a2;
+					for (let x = 0; x < width; x++) {
+						let x1 = rot ? height - 1 - y : x;
+						let y1 = rot ? x : y;
+						let i = ImageDither.indexOf(palette, this.result[x1][y1]);
+						if (two_pixel_one_byte) {
+							if (x % 2 == 0) {
+								a1 = [0, 3 * 16, 4 * 16][i];
+							} else {
+								a1 += [0, 3, 4][i];
+								outputData1.push(a1);
+							}
+						} else {
+							let j = x % 8;
+							if (i == -1) {
+								throw "index not found";
+							}
+							if (j == 0) {
+								a1 = 0;
+								a2 = 0;
+							}
+							if (i & 1) {
+								a1 += 0x80 >> j;
+							}
+							if (i & 2) {
+								a2 += 0x80 >> j;
+							}
+							if (j == 7 || x == width - 1) {
+								outputData1.push(a1);
+								outputData2.push(a2);
+							}
+						}
+					}
+				}
+				if (palette.length <= 2) {
+					outputData2 = [];
+				}
+				return { o1: outputData1, o2: outputData2 };
+			}
+
+			/**
+			 * 查找元素在列表中的索引
+			 * @param {Array<Color>} list
+			 * @param {Color} value
+			 * @returns {number}
+			 */
+			static indexOf(list, value) {
+				if (typeof value === 'number') {
+					return list.indexOf(value);
+				}
+				var i = 0;
+				for (let i = 0; i < list.length; i++) {
+					if (list[i].r != value.r) continue;
+					if (list[i].g != value.g) continue;
+					if (list[i].b != value.b) continue;
+					return i;
+				}
+				throw new Error("element not found");
+			}
+		}
+
+		/** @type {Array<ColorRAW>} */
+		var outputData;
+
+		/**
+		 * 获取当前选中的调色板
+		 * @returns {Array<Color>}
+		 */
+		function getSelectedPalette() {
+			if (document.getElementById("bw").checked) {
+				return [0, 255];
+			} else if (document.getElementById("4gray").checked) {
+				return [0, 0x55, 0xaa, 255];
+			} else if (document.getElementById("bwr").checked || document.getElementById("bwr2").checked) {
+				return [{ r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, { r: 255, g: 0, b: 0 }];
+			} else if (document.getElementById("bwry").checked) {
+				return [{ r: 0, g: 0, b: 0 }, { r: 255, g: 255, b: 255 }, { r: 255, g: 0, b: 0 }, { r: 255, g: 255, b: 0 }];
+			} else if (document.getElementById("cmyk").checked) {
+				// seven color
+				return [
+					{ r: 255, g: 255, b: 0 }, // 黄色
+					{ r: 0, g: 255, b: 0 },   // 绿色
+					{ r: 0, g: 0, b: 0 },     // 黑色
+					{ r: 255, g: 0, b: 0 },   // 红色
+					{ r: 255, g: 255, b: 255 }, // 白色
+					{ r: 255, g: 128, b: 0 }, // 橙色
+					{ r: 0, g: 0, b: 255 }    // 蓝色
+				];
+			}
+			return [];
+		}
+
+		/**
+		 * 更新图像
+		 */
+		function update_image() {
+			const image_file = document.getElementById("image_file");
+			var xy = document.getElementById("resolution").value.split("*");
+			canvas.width = xy[0];
+			canvas.height = xy[1];
+			original.width = canvas.width;
+			original.height = canvas.height;
+			if (image_file.files.length > 0) {
+				const file = image_file.files[0];
+				const canvas = document.getElementById("canvas");
+				const ctx = canvas.getContext("2d");
+				const image = new Image();
+				image.src = URL.createObjectURL(file);
+				image.onload = function (event) {
+					const canvas = document.getElementById("canvas");
+					const original = document.getElementById("original");
+					var rot = (xy[0] < xy[1]) ^ (image.width < image.height);
+					if (rot) {
+						canvas.width = xy[1];
+						canvas.height = xy[0];
+					} else {
+						canvas.width = xy[0];
+						canvas.height = xy[1];
+					}
+					original.width = canvas.width;
+					original.height = canvas.height;
+					document.getElementById("original").getContext("2d").drawImage(image, 0, 0, image.width, image.height, 0, 0, canvas.width, canvas.height);
+					ctx.drawImage(image, 0, 0, image.width, image.height, 0, 0, canvas.width, canvas.height);
+					const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+					var image_dither = new ImageDither(canvas.width, canvas.height, imageData.data);
+					var mode = document.getElementById("dither_mode").checked;
+					var palette = getSelectedPalette();
+					image_dither.dither(palette, mode);
+					res = image_dither.toBytes(palette, rot, document.getElementById("bwr2").checked);
+					outputData = res.o1.concat(res.o2);
+					for (let i = 0; i < imageData.data.length; i++) {
+						imageData.data[i] = image_dither.imageData[i];
+					}
+					ctx.putImageData(imageData, 0, 0);
+					URL.revokeObjectURL(this.src);
+				}
+			}
+		}
+		update_image();
+
+		/**
+		 * 获取画布上的坐标
+		 * @param {HTMLCanvasElement} canvas
+		 * @param {number} x
+		 * @param {number} y
+		 * @returns {{x: number, y: number}}
+		 */
+		function get_position(canvas, x, y) {
+			let rect = canvas.getBoundingClientRect()
+			return {
+				x: x - rect.left * (canvas.width / rect.width),
+				y: y - rect.top * (canvas.height / rect.height)
+			}
+		}
+
+		/**
+		 * 清空画布
+		 */
+		function clear_canvas() {
+			if (confirm('确认清除屏幕?')) {
+				const canvas = document.getElementById('canvas');
+				const ctx = canvas.getContext("2d");
+				ctx.fillStyle = 'white';
+				ctx.fillRect(0, 0, canvas.width, canvas.height);
+			}
+		}
+
+		/**
+		 * 通用画布变换函数
+		 * @param {Function} transformFn - 变换规则函数，接受 (x, y, width, height) 返回 { newX, newY, newWidth?, newHeight? }
+		 */
+		function transform_canvas(transformFn) {
+			const canvas = document.getElementById('canvas');
+			const ctx = canvas.getContext("2d");
+			const originW = canvas.width;
+			const originH = canvas.height;
+
+			const sourceData = ctx.getImageData(0, 0, originW, originH);
+
+			// 获取新的画布尺寸（如果有调整）
+			const { newWidth = originW, newHeight = originH } = transformFn(-1, -1, originW, originH);
+			const newData = ctx.createImageData(newWidth, newHeight);
+
+			// 调整画布尺寸
+			canvas.width = newWidth;
+			canvas.height = newHeight;
+
+			// 应用变换规则
+			for (let y = 0; y < originH; y++) {
+				for (let x = 0; x < originW; x++) {
+					const originalPos = (y * originW + x) * 4;
+					const { newX, newY } = transformFn(x, y, originW, originH);
+					const newPos = (newY * newWidth + newX) * 4;
+
+					// 复制像素（包括RGBA四个通道）
+					newData.data[newPos] = sourceData.data[originalPos];       // R
+					newData.data[newPos + 1] = sourceData.data[originalPos + 1]; // G
+					newData.data[newPos + 2] = sourceData.data[originalPos + 2]; // B
+					newData.data[newPos + 3] = sourceData.data[originalPos + 3]; // A
+				}
+			}
+
+			// 更新画布内容
+			ctx.putImageData(newData, 0, 0);
+		}
+
+		/**
+		 * 水平翻转画布
+		 */
+		function horizon_clip_canvas() {
+			transform_canvas((x, y, width) => ({
+				newX: width - 1 - x,
+				newY: y
+			}));
+		}
+
+		/**
+		 * 垂直翻转画布
+		 */
+		function vertical_clip_canvas() {
+			transform_canvas((x, y, width, height) => ({
+				newX: x,
+				newY: height - 1 - y
+			}));
+		}
+
+		/**
+		 * 顺时针旋转画布
+		 */
+		function rotate_canvas() {
+			transform_canvas((x, y, width, height) => ({
+				newX: height - 1 - y,
+				newY: x,
+				newWidth: height,
+				newHeight: width
+			}));
+		}
+
+		/**
+		 * 延迟函数
+		 * @param {number} ms 毫秒
+		 * @returns {Promise<void>}
+		 */
+		function delay(ms) {
+			return new Promise(resolve => setTimeout(resolve, ms));
+		}
+
+		document.getElementById("go").addEventListener("click", async event => {
+			var PACK_LEN, BURST_NUM;
+			const textEncoder = new TextEncoder();
+			const utf8array = textEncoder.encode(document.getElementById("tag_name").value);
+			if (utf8array.length > 12) {
+				alert("名字太长");
+				return;
+			}
+			for (e of document.getElementsByName("pack_len")) {
+				if (e.checked) {
+					PACK_LEN = Number(e.value);
+					BURST_NUM = Math.round(8192 / PACK_LEN);
+					break;
+				}
+			}
+			try {
+				await priceTag.request();
+				for (var retry = 0; ;) {
+					try {
+						await priceTag.connect();
+						break;
+					}
+					catch (error) {
+						console.error(error);
+						if (++retry == 4) {
+							throw error;
+						}
+						console.log("retry");
+					}
+				}
+				var value = await priceTag.readProperty();
+				var width = value.getUint16(0, true);
+				var height = value.getUint16(2, true);
+				var type = value.getUint8(4);
+				console.log(`${width}*${height}, type=${type}`);
+				await priceTag.writeCommand(Uint8Array.of(82)); //Reset
+				for (var retry = 0; ; retry++) {
+					var r = await priceTag.readStatus();
+					if (r.getUint8(0) == 0x42) {
+						console.log('initialized');
+						break;
+					} else {
+						if (retry < 10) {
+							await delay(20);
+						} else {
+							throw "md5 uninitialized";
+						}
+					}
+				}
+
+				/** @type {HTMLCanvasElement} */
+				const canvas = document.getElementById("canvas");
+				const ctx = canvas.getContext("2d");
+				const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+				var image_dither = new ImageDither(canvas.width, canvas.height, imageData.data);
+				var mode = document.getElementById("dither_mode").checked;
+				var palette = getSelectedPalette();
+				image_dither.dither(palette, mode);
+				var xy = document.getElementById("resolution").value.split("*");
+				var rot = (xy[0] < xy[1]) ^ (canvas.width < canvas.height);
+				res = image_dither.toBytes(palette, rot, document.getElementById("bwr2").checked);
+				outputData = res.o1.concat(res.o2);
+				for (let i = 0; i < imageData.data.length; i++) {
+					imageData.data[i] = image_dither.imageData[i];
+				}
+				ctx.putImageData(imageData, 0, 0);
+
+				var binData = structuredClone(outputData);
+
+				while (binData.length % PACK_LEN) {
+					binData.push(0);
+				}
+				for (i = 0; i < binData.length; i += PACK_LEN) {
+					chunk = Uint8Array.from(binData.slice(i, i + PACK_LEN));
+					await priceTag.writeData(chunk, i % (PACK_LEN * BURST_NUM) == 0 || i + PACK_LEN >= binData.length);
+					document.getElementById("progressBar").value = Math.round(i / binData.length * 100);
+					document.getElementById("progress").innerHTML = `${i}/${binData.length}`;
+				}
+				await priceTag.writeCommand(Uint8Array.of(0x46));
+				for (var retry = 0; ; retry++) {
+					var r = await priceTag.readStatus();
+					if (r.getUint8(0) == 0x44) {
+						console.log('finalized');
+						break;
+					} else {
+						if (retry < 10) {
+							await delay(20);
+						} else {
+							throw "md5 unfinalized";
+						}
+					}
+				}
+				document.getElementById("progressBar").value = 100;
+				document.getElementById("progress").innerHTML = "";
+				if (utf8array.length > 0) {
+					await priceTag.rename(utf8array);
+				}
+
+			} catch (error) {
+				console.error(error);
+			} finally {
+				priceTag.disconnect();
+			}
+		});
+
+		/*****************************以上是移植的**************************************/
+
+		document.body.onload = () => {
+			const canvas = document.getElementById('canvas');
+			const ctx = canvas.getContext("2d");
+			ctx.fillStyle = 'white';
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+			let is_allow_drawing = false;
+			let is_allow_move_editor = false;
+			const image_mode = document.getElementById('canvas-mode');
+			const paint_size = document.getElementById('paint-size');
+			const paint_color = document.getElementById('paint-color');
+			const editor = document.getElementById('edit-font');
+			const font = document.getElementById('font');
+			//document.getElementById('dithering').value = 'bayer';
+			image_mode.value = 'paint';
+			paint_color.value = 'black';
+			font.value = '黑体';
+
+			editor.onmousemove = function (e) {
+				editor.style.fontSize = `${paint_size.value * 10}px`;
+				editor.style.color = paint_color.value;
+				editor.style.fontFamily = font.value;
+				editor.style.fontWeight = 'bold';
+
+				if (is_allow_move_editor) {
+					const { x, y } = get_position(canvas, e.clientX, e.clientY);
+					if (x < 0 || y < 0 || x > canvas.width || y > canvas.height) {
+						return;
+					}
+
+					editor.style.left = `${e.clientX - 20}px`;
+					editor.style.top = `${e.clientY - 20}px`;
+
+				}
+			}
+
+			editor.onmousedown = function (e) {
+				is_allow_move_editor = true;
+			}
+
+			editor.onmouseup = function (e) {
+				is_allow_move_editor = false;
+			}
+
+			document.getElementById('update-text').onclick = function () {
+				if (!editor.value.length) {
+					alert('请先输入文字');
+					return;
+				}
+				editor.style.display = 'none';
+				ctx.beginPath();
+				ctx.font = `bold ${paint_size.value * 10}px ${font.value}`;
+				ctx.fillStyle = paint_color.value;
+				const { x, y } = get_position(canvas, parseInt(editor.style.left), parseInt(editor.style.top) + paint_size.value * 10);
+				ctx.fillText(editor.value, x, y);
+			}
+
+			document.getElementById('resolution').onchange = function () {
+				const size = document.getElementById('resolution').value;
+				console.log(size)
+				if (size == "128*296") {
+					canvasRotate = 90;
+				}
+				else {
+					canvasRotate = 0;
+				}
+				width = parseInt(size.split('*')[0])
+				height = parseInt(size.split('*')[1])
+				document.getElementById('canvas').width = width;
+				document.getElementById('canvas').height = height;
+				update_image();
+			}
+
+			image_mode.onchange = function (e) {
+				if (image_mode.value === 'font') {
+					document.getElementById('update-text').style.display = 'inline-block';
+					document.getElementById('font').style.display = 'inline-block';
+
+					editor.style.display = 'block';
+					editor.style.left = `${e.clientX}px`;
+					editor.style.top = `${e.clientY}px`;
+					return;
+				}
+				document.getElementById('update-text').style.display = 'none';
+				document.getElementById('font').style.display = 'none';
+				editor.style.display = 'none';
+			}
+
+			paint_size.onchange = function () {
+				if (image_mode.value === 'font') {
+					editor.style.fontSize = `${paint_size.value * 10}px`;
+				}
+			}
+
+			paint_color.onchange = function () {
+				if (image_mode.value === 'font') {
+					editor.style.color = paint_color.value;
+				}
+			}
+
+			font.onchange = function () {
+				if (image_mode.value === 'font') {
+					editor.style.fontFamily = font.value;
+				}
+			}
+
+			const handleStart = (x, y) => {
+				const { x: canvasX, y: canvasY } = get_position(canvas, x, y);
+				switch (image_mode.value) {
+					case 'paint':
+						is_allow_drawing = true;
+						ctx.beginPath();
+						ctx.moveTo(canvasX, canvasY);
+						break;
+					case 'font':
+						editor.style.display = 'block';
+						editor.style.left = `${x}px`;
+						editor.style.top = `${y}px`;
+						editor.style.fontSize = `${paint_size.value * 10}px`;
+						editor.style.color = paint_color.value;
+						editor.style.fontFamily = font.value;
+						editor.style.fontWeight = 'bold';
+						break;
+					default:
+						break;
+				}
+			};
+
+			const handleMove = (x, y) => {
+				const { x: canvasX, y: canvasY } = get_position(canvas, x, y);
+				switch (image_mode.value) {
+					case 'paint':
+						if (is_allow_drawing) {
+							ctx.lineWidth = paint_size.value;
+							ctx.strokeStyle = paint_color.value;
+							ctx.lineTo(canvasX, canvasY);
+							ctx.stroke();
+						}
+						break;
+					case 'font':
+						break;
+					default:
+						break;
+				}
+			};
+
+			const handleEnd = () => {
+				switch (image_mode.value) {
+					case 'paint':
+						is_allow_drawing = false;
+						break;
+					case 'font':
+						editor.focus();
+						is_allow_move_editor = false;
+						break;
+					default:
+						break;
+				}
+			};
+
+			// 鼠标事件
+			canvas.onmousedown = (e) => handleStart(e.clientX, e.clientY);
+			canvas.onmousemove = (e) => handleMove(e.clientX, e.clientY);
+			canvas.onmouseup = handleEnd;
+			canvas.onmouseleave = () => { if (image_mode.value === 'paint') is_allow_drawing = false; };
+
+			// 触摸事件
+			canvas.addEventListener("touchstart", (e) => {
+				e.preventDefault();
+				const touch = e.touches[0];
+				handleStart(touch.clientX, touch.clientY);
+			});
+
+			canvas.addEventListener("touchmove", (e) => {
+				e.preventDefault();
+				const touch = e.touches[0];
+				handleMove(touch.clientX, touch.clientY);
+			});
+
+			canvas.addEventListener("touchend", (e) => {
+				e.preventDefault();
+				handleEnd();
+			});
+		}
+
+	</script>
+</body>
+
+</html>
